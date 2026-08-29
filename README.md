@@ -16,6 +16,7 @@ dependencies, no external fonts.
 | Fixtures & results | ESPN `soccer/eng.2` scoreboard, walked month by month | free |
 | League table | ESPN `soccer/eng.2` standings | free |
 | News | Google News RSS | free |
+| Highlights | Official YouTube channels (@WxmAFCofficial, @theEFL, @cbssportsgolazo), verified via oEmbed | free |
 | Podcasts | Public podcast RSS (#AskWXM, Me the Wife and Wrexham AFC, Rousey's, BBC Sounds) | free |
 | Odds | Polymarket per-fixture 3-way markets | free |
 | Visitors | hits.sh badge | free, no signup |
