@@ -6,7 +6,7 @@
 <title>Wrexham Tracker — Championship 2026/27</title>
 <meta name="description" content="Wrexham AFC fixtures, results, Championship table, promotion projection, news and podcasts. Updated hourly.">
 <meta name="theme-color" content="#0d0f12">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src https: data:; media-src https:; style-src 'unsafe-inline'; script-src 'unsafe-inline'; connect-src 'self'; base-uri 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src https: data:; media-src https:; frame-src https://www.youtube-nocookie.com; style-src 'unsafe-inline'; script-src 'unsafe-inline'; connect-src 'self'; base-uri 'none'; form-action 'none'">
 <meta property="og:title" content="Wrexham Tracker">
 <meta property="og:description" content="Fixtures, table, market odds, news and podcasts for Wrexham AFC.">
 <meta property="og:type" content="website">
@@ -122,6 +122,37 @@ footer{border-top:1px solid var(--line);margin-top:26px;padding:18px 0 30px;
   font-size:12px;color:var(--mut);text-align:center;line-height:2}
 footer img{vertical-align:middle;margin-top:5px;min-height:20px}
 footer .fb{color:var(--red);font-weight:600}
+.crest{width:22px;height:22px;object-fit:contain;flex:0 0 22px}
+.crest.lg{width:34px;height:34px;flex:0 0 34px}
+.cbadge{font-size:9px;font-weight:800;letter-spacing:.5px;text-transform:uppercase;
+  color:#ffd166;border:1px solid #4a3d1a;background:#241f10;border-radius:4px;padding:2px 5px}
+.cal{font-size:15px;opacity:.55;padding:4px;text-decoration:none}
+.cal:hover{opacity:1}
+.mlocal{font-size:10px;color:var(--mut);display:block}
+/* match centre */
+.mc-head{display:flex;align-items:center;justify-content:center;gap:14px;padding:6px 0 14px}
+.mc-side{display:flex;flex-direction:column;align-items:center;gap:6px;width:88px;text-align:center}
+.mc-side span{font-size:11px;color:var(--mut);line-height:1.3}
+.mc-score{font-size:36px;font-weight:800;letter-spacing:-1.5px;font-variant-numeric:tabular-nums}
+.tl{border-left:2px solid var(--line);margin:4px 0 4px 7px;padding-left:14px}
+.tl div{position:relative;font-size:13px;padding:5px 0;color:var(--tx)}
+.tl div::before{content:"";position:absolute;left:-19px;top:11px;width:8px;height:8px;
+  border-radius:50%;background:var(--line)}
+.tl div.g::before{background:var(--red)}
+.tl b{font-variant-numeric:tabular-nums;color:var(--mut);font-weight:600;margin-right:7px}
+.tl em{font-style:normal;color:var(--mut);font-size:11px}
+.sb{margin:9px 0}
+.sb .lab{display:flex;justify-content:space-between;font-size:12px;margin-bottom:4px;
+  font-variant-numeric:tabular-nums}
+.sb .lab i{font-style:normal;color:var(--mut)}
+.sb .tr{display:flex;height:7px;border-radius:4px;overflow:hidden;background:var(--panel2)}
+.sb .tr u{display:block;background:var(--red)}
+.sb .tr s{display:block;background:#3a4049}
+.xi{display:grid;grid-template-columns:1fr 1fr;gap:14px;font-size:12px;margin-top:6px}
+.xi ol{list-style:none;line-height:1.85}
+.xi h4{font-size:10px;text-transform:uppercase;letter-spacing:.5px;color:var(--mut);margin-bottom:5px}
+.xi i{font-style:normal;color:var(--mut);font-size:10px;margin-right:5px}
+.yt{width:100%;aspect-ratio:16/9;border:0;border-radius:10px;margin-top:10px}
 .obar{display:flex;height:11px;border-radius:6px;overflow:hidden;margin:10px 0 9px;gap:2px}
 .obar i{display:block}
 .okey{display:flex;justify-content:space-between;font-size:12px;color:var(--mut);gap:8px}
@@ -148,8 +179,8 @@ footer .fb{color:var(--red);font-weight:600}
 <nav><div class="tabs" role="tablist">
   <button class="tab" role="tab" aria-selected="true"  data-p="fixtures">Fixtures</button>
   <button class="tab" role="tab" aria-selected="false" data-p="table">Table</button>
-  <button class="tab" role="tab" aria-selected="false" data-p="promo">Promotion</button>
-  <button class="tab" role="tab" aria-selected="false" data-p="odds">Odds</button>
+  <button class="tab" role="tab" aria-selected="false" data-p="centre">Match</button>
+  <button class="tab" role="tab" aria-selected="false" data-p="promo">Chances</button>
   <button class="tab" role="tab" aria-selected="false" data-p="news">News</button>
   <button class="tab" role="tab" aria-selected="false" data-p="pods">Podcasts</button>
 </div></nav>
@@ -158,7 +189,7 @@ footer .fb{color:var(--red);font-weight:600}
   <section id="fixtures"><div class="skel">Loading…</div></section>
   <section id="table" hidden></section>
   <section id="promo" hidden></section>
-  <section id="odds" hidden></section>
+  <section id="centre" hidden></section>
   <section id="news" hidden></section>
   <section id="pods" hidden></section>
 </main>
@@ -184,6 +215,8 @@ const ukDay   = d => d.toLocaleDateString("en-GB", {...UK, weekday:"short"});
 const ukDayNo = d => d.toLocaleDateString("en-GB", {...UK, day:"numeric"});
 const ukMonth = d => d.toLocaleDateString("en-GB", {...UK, month:"short", year:"numeric"});
 const ukFull  = d => d.toLocaleDateString("en-GB", {...UK, day:"numeric", month:"short"});
+const TZ = Intl.DateTimeFormat().resolvedOptions().timeZone;
+const localTime = d => d.toLocaleTimeString("en-GB", {hour:"2-digit", minute:"2-digit"});
 
 function ago(iso){
   const m = (Date.now() - new Date(iso)) / 6e4;
@@ -214,7 +247,8 @@ function hero(d){
     const cls = last.result === "W" ? "--w" : last.result === "L" ? "--l" : "--d";
     $("#last").innerHTML = `<h2>Last result</h2>
       <div class="score" style="color:var(${cls})">${last.us}&ndash;${last.them}</div>
-      <div class="opp">${last.home ? "vs" : "at"} ${esc(last.opponent)} &middot; ${ukFull(new Date(last.date))}</div>
+      <div class="opp"><img class="crest" src="${esc(last.logo)}" alt="" loading="lazy"> ${last.home ? "vs" : "at"} ${esc(last.opponent)}
+        ${last.comp !== "League" ? `<span class="cbadge">${esc(last.comp)}</span>` : ""}</div>
       <div class="form">${d.projection.form.map(f => `<span class="pill ${f}">${f}</span>`).join("")}</div>`;
   }
   const next = d.matches.find(m => !m.completed);
@@ -222,10 +256,13 @@ function hero(d){
   const dt = new Date(next.date);
   const when = dt.toLocaleString("en-GB", {...UK, weekday:"short", day:"numeric", month:"short",
                                            hour:"2-digit", minute:"2-digit"}) + " UK";
+  const mine = localTime(dt), differs = TZ !== "Europe/London";
   $("#next").innerHTML = `<h2>Next match</h2>
     <div class="count" id="cd">&nbsp;</div>
-    <div class="opp">${next.home ? "vs" : "at"} <b>${esc(next.opponent)}</b></div>
-    <div class="next-when">${when}</div>`;
+    <div class="opp"><img class="crest" src="${esc(next.logo)}" alt="" loading="lazy"> ${next.home ? "vs" : "at"} <b>${esc(next.opponent)}</b>
+      ${next.comp !== "League" ? `<span class="cbadge">${esc(next.comp)}</span>` : ""}</div>
+    <div class="next-when">${when}${differs ? ` &middot; ${mine} your time` : ""}</div>
+    <div><a class="olink" href="ics/${esc(next.id)}.ics">&#128197; Add to calendar</a></div>`;
   const tick = () => {
     let s = (dt - Date.now()) / 1000;
     if (s <= 0){ $("#cd").textContent = "Kick-off"; return clearInterval(iv); }
@@ -246,10 +283,15 @@ function fixtures(d){
     const right = m.completed
       ? `<div class="mres" style="color:var(--${m.result === "W" ? "w" : m.result === "L" ? "l" : "d"})">${m.us}&ndash;${m.them}</div>`
       : isNext ? `<div class="mtag">Next</div>`
-      : `<div class="mdate" style="width:auto;text-align:right">${ukTime(dt)}</div>`;
+      : `<div class="mdate" style="width:auto;text-align:right">${ukTime(dt)}
+           ${TZ !== "Europe/London" ? `<span class="mlocal">${localTime(dt)} you</span>` : ""}</div>`;
     html += `<div class="mrow${isNext ? " is-next" : ""}">
       <div class="mdate"><b>${ukDayNo(dt)}</b>${ukDay(dt)}</div>
-      <div class="mopp">${esc(m.opponent)} <i>${m.home ? "(H)" : "(A)"}</i></div>${right}</div>`;
+      <img class="crest" src="${esc(m.logo)}" alt="" loading="lazy">
+      <div class="mopp">${esc(m.opponent)} <i>${m.home ? "(H)" : "(A)"}</i>
+        ${m.comp !== "League" ? `<span class="cbadge">${esc(m.comp)}</span>` : ""}</div>
+      ${right}
+      ${m.completed ? "" : `<a class="cal" href="ics/${esc(m.id)}.ics" title="Add to calendar" aria-label="Add ${esc(m.opponent)} to calendar">&#128197;</a>`}</div>`;
   }
   $("#fixtures").innerHTML = html;
 }
@@ -257,7 +299,7 @@ function fixtures(d){
 function table(d){
   const rows = d.table.map(r => {
     const cls = [r.isWrexham ? "wxm" : "", (r.rank === 7 || r.rank === 22) ? "line" : ""].join(" ").trim();
-    return `<tr class="${cls}"><td>${r.rank}</td><td>${esc(r.team)}</td>
+    return `<tr class="${cls}"><td>${r.rank}</td><td><img class="crest" style="width:17px;height:17px;flex:none;vertical-align:-4px;margin-right:7px" src="${esc(r.logo)}" alt="" loading="lazy">${esc(r.team)}</td>
       <td>${r.played}</td><td class="hide-sm">${r.won}</td><td class="hide-sm">${r.drawn}</td>
       <td class="hide-sm">${r.lost}</td><td>${r.gd > 0 ? "+" : ""}${r.gd}</td><td>${r.points}</td></tr>`;
   }).join("");
@@ -290,7 +332,55 @@ function promo(d){
                          : `<b style="color:var(--tx)">Inside the playoff places</b> with ${p.remaining} to play.`}<br>
       Last season Wrexham finished 7th &mdash; two points short of the playoffs.<br>
       This is a straight-line projection from current form, not a simulation. Treat it as a pulse, not a prediction.
-    </div></div>`;
+    </div></div>
+    <h2 style="font-size:11px;font-weight:700;letter-spacing:.7px;text-transform:uppercase;color:var(--mut);margin:22px 0 10px">
+      What the market thinks</h2>` + odds(d);
+}
+
+function centre(d){
+  const L = d.lastMatch;
+  if (!L){ $("#centre").innerHTML = "<div class='skel'>No completed match yet.</div>"; return; }
+  const m = L.match, us = L.stats.us || {}, them = L.stats.them || {};
+  const n = v => parseFloat(v) || 0;
+
+  const bar = (label, a, b) => {
+    const t = n(a) + n(b) || 1;
+    return `<div class="sb"><div class="lab"><b>${a ?? 0}</b><i>${label}</i><b>${b ?? 0}</b></div>
+      <div class="tr"><u style="width:${n(a)/t*100}%"></u><s style="width:${n(b)/t*100}%"></s></div></div>`;
+  };
+
+  const timeline = L.events.length ? `<div class="tl">${L.events.map(e => `
+    <div class="${e.kind === "goal" ? "g" : ""}"><b>${esc(e.clock)}</b>
+      ${e.kind === "goal" ? "&#9917;" : e.kind === "red" ? "&#128308;" : "&#129000;"}
+      ${esc(e.who || "")} <em>${e.us ? "Wrexham" : esc(m.opponent)}</em></div>`).join("")}</div>` : "";
+
+  const xi = side => `<div><h4>${side === "us" ? "Wrexham" : esc(m.opponent)}</h4><ol>${
+    (L.lineups[side] || []).map(p => `<li><i>${esc(p.pos)}</i>${esc(p.name)}</li>`).join("")}</ol></div>`;
+
+  const video = L.yt
+    ? `<iframe class="yt" src="https://www.youtube-nocookie.com/embed/${esc(L.yt)}"
+         title="Match highlights" allowfullscreen loading="lazy"></iframe>`
+    : `<a class="olink" href="${esc(L.search)}" target="_blank" rel="noopener noreferrer">&#127916; Find highlights on YouTube &rarr;</a>`;
+
+  $("#centre").innerHTML = `<div class="card">
+    <div class="meta"><span class="src">${esc(m.comp)}</span><span>${ukFull(new Date(m.date))}</span></div>
+    <div class="mc-head">
+      <div class="mc-side"><img class="crest lg" src="${esc((d.table.find(r => r.isWrexham) || {}).logo || "")}" alt="" loading="lazy"><span>Wrexham</span></div>
+      <div class="mc-score" style="color:var(--${m.result === "W" ? "w" : m.result === "L" ? "l" : "d"})">
+        ${m.us}&ndash;${m.them}</div>
+      <div class="mc-side"><img class="crest lg" src="${esc(m.logo)}" alt="" loading="lazy"><span>${esc(m.opponent)}</span></div>
+    </div>
+    ${timeline}
+    <div style="margin-top:14px">
+      ${bar("Possession %", us.possessionPct, them.possessionPct)}
+      ${bar("Shots", us.totalShots, them.totalShots)}
+      ${bar("On target", us.shotsOnTarget, them.shotsOnTarget)}
+      ${bar("Corners", us.wonCorners, them.wonCorners)}
+      ${bar("Fouls", us.foulsCommitted, them.foulsCommitted)}
+    </div>
+    ${video}
+  </div>
+  <div class="card"><h2>Starting XI</h2><div class="xi">${xi("us")}${xi("them")}</div></div>`;
 }
 
 function odds(d){
@@ -310,7 +400,7 @@ function odds(d){
       <a class="olink" href="${esc(o.url)}" target="_blank" rel="noopener noreferrer">View market on Polymarket &rarr;</a>
     </div>`;
   }).join("");
-  $("#odds").innerHTML = (rows || `<div class="card"><div class="note" style="margin:0">No live markets for the
+  return (rows || `<div class="card"><div class="note" style="margin:0">No live markets for the
     next fixtures yet. Polymarket usually lists a Championship match a few days out.</div></div>`) +
     `<div class="note">Prices are live Polymarket markets &mdash; what people are actually betting, not a model.
      Each of the three outcomes is its own contract, so the percentages include spread and sum above 100%.<br>
@@ -336,10 +426,11 @@ function pods(d){
 
 fetch("data.json").then(r => r.json()).then(d => {
   $("#comp").textContent = d.competition + " " + d.season;
-  const done = d.matches.filter(m => m.completed).length, total = d.matches.length;
+  const lg = d.matches.filter(m => m.comp === "League");   // cups don't belong in league progress
+  const done = lg.filter(m => m.completed).length, total = lg.length;
   $("#prog").textContent = `${done} played \u00b7 ${total - done} to go`;
   $("#sbarfill").style.width = (done / total * 100) + "%";
-  hero(d); fixtures(d); table(d); promo(d); odds(d); news(d); pods(d);
+  hero(d); fixtures(d); table(d); centre(d); promo(d); news(d); pods(d);
   $("#stamp").textContent = "Updated " + ago(d.updated);
   tabs();
 }).catch(() => { $("#fixtures").innerHTML = "<div class='skel'>Couldn&rsquo;t load data. Try a refresh.</div>"; });

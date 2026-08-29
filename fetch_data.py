@@ -1,15 +1,19 @@
 #!/usr/bin/env python3
 """Build data.json for the Wrexham tracker from free public feeds (no API keys)."""
 
-import json, re, time, urllib.parse, urllib.request, xml.etree.ElementTree as ET
-from datetime import datetime, timezone
+import json, os, re, time, urllib.parse, urllib.request, xml.etree.ElementTree as ET
+from datetime import datetime, timedelta, timezone
 from email.utils import parsedate_to_datetime
 from html import unescape
 
 UA = "wrexham-tracker/1.0 (github.com/danpune/wrexham-tracker)"
 
 TEAM_ID = "352"          # Wrexham, ESPN
-LEAGUE = "eng.2"         # EFL Championship
+LEAGUE = "eng.2"         # EFL Championship — table and projection are league-only
+# Cups run on their own calendars: the Carabao Cup starts in August, and
+# Championship clubs enter the FA Cup at the third round in January.
+COMPETITIONS = [(LEAGUE, "League"), ("eng.league_cup", "EFL Cup"), ("eng.fa", "FA Cup")]
+LOGO = "https://a.espncdn.com/i/teamlogos/soccer/500/%s.png"
 SEASON_MONTHS = [(2026, m) for m in (8, 9, 10, 11, 12)] + [(2027, m) for m in range(1, 7)]
 PLAYOFF_CUTOFF = 72      # historical 6th-place points, Championship. Used for the projection.
 MIN_GAMES_TO_PROJECT = 8
@@ -68,14 +72,16 @@ def rfc822(s):
 # league scoreboard month by month and filter. 11 requests, cheap, complete.
 def fetch_matches():
     out = []
-    for year, month in SEASON_MONTHS:
+    for league, comp_name in COMPETITIONS:
+      for year, month in SEASON_MONTHS:
         last = 31 if month in (1, 3, 5, 7, 8, 10, 12) else 30 if month != 2 else 28
-        url = (f"https://site.api.espn.com/apis/site/v2/sports/soccer/{LEAGUE}/scoreboard"
+        url = (f"https://site.api.espn.com/apis/site/v2/sports/soccer/{league}/scoreboard"
                f"?dates={year}{month:02d}01-{year}{month:02d}{last}")
         try:
             data = get(url, as_json=True)
         except Exception:
             continue
+        time.sleep(0.3)          # 33 requests a run: don't burst ESPN into a 403
         for ev in data.get("events", []):
             comp = ev["competitions"][0]
             teams = comp["competitors"]
@@ -91,8 +97,12 @@ def fetch_matches():
             if done:
                 result = "W" if us_score > them_score else "L" if us_score < them_score else "D"
             out.append({
+                "id": ev["id"],
+                "league": league,
+                "comp": comp_name,
                 "date": iso(ev["date"]),
                 "opponent": them["team"]["displayName"],
+                "logo": LOGO % them["team"]["id"],
                 "opponentAbbr": them["team"].get("abbreviation", ""),
                 "home": us.get("homeAway") == "home",
                 "venue": comp.get("venue", {}).get("fullName", ""),
@@ -127,6 +137,7 @@ def fetch_table():
             "ga": val("pointsAgainst"),
             "gd": val("pointDifferential"),
             "points": val("points"),
+            "logo": LOGO % e["team"]["id"],
             "isWrexham": e["team"]["id"] == TEAM_ID,
         })
     rows.sort(key=lambda r: r["rank"])
@@ -160,7 +171,12 @@ def safe_url(u):
     URL here would land in an href or a media src, and HTML-escaping does not
     neutralise a scheme. Rejecting at the source covers every consumer."""
     u = (u or "").strip()
-    return u if u[:7].lower() == "http://" or u[:8].lower() == "https://" else ""
+    if u[:7].lower() == "http://":
+        # The site is served over HTTPS, so plain-http media is blocked as mixed
+        # content regardless of CSP. Several podcast CDNs still publish http
+        # enclosures and serve the same file fine over TLS.
+        u = "https://" + u[7:]
+    return u if u[:8].lower() == "https://" else ""
 
 
 def strip_html(s):
@@ -241,6 +257,69 @@ def fetch_odds(matches, lookahead=5):
     return odds
 
 
+# --- match centre ------------------------------------------------------------
+# ESPN's summary endpoint carries team stats, the goal/card timeline and both
+# XIs. Pulled for the latest finished match only -- older games would bloat
+# data.json for something nobody scrolls back to.
+KEEP_STATS = ["possessionPct", "totalShots", "shotsOnTarget", "wonCorners",
+              "foulsCommitted", "yellowCards", "redCards", "saves"]
+
+
+def fetch_summary(matches):
+    done = [m for m in matches if m["completed"]]
+    if not done:
+        return None
+    m = done[-1]
+    try:
+        d = get(f"https://site.api.espn.com/apis/site/v2/sports/soccer/{m['league']}"
+                f"/summary?event={m['id']}", as_json=True)
+    except Exception:
+        return None
+
+    stats = {}
+    for t in d.get("boxscore", {}).get("teams", []):
+        side = "us" if t["team"]["id"] == TEAM_ID else "them"
+        stats[side] = {x["name"]: x.get("displayValue")
+                       for x in t.get("statistics", []) if x["name"] in KEEP_STATS}
+
+    goals = []
+    for k in d.get("keyEvents", []):
+        kind = (k.get("type") or {}).get("text", "")
+        if not k.get("scoringPlay") and "Card" not in kind:
+            continue
+        who = (k.get("participants") or [{}])[0].get("athlete", {}).get("displayName", "")
+        goals.append({
+            "clock": (k.get("clock") or {}).get("displayValue", ""),
+            "kind": "goal" if k.get("scoringPlay") else
+                    "red" if "Red" in kind else "yellow",
+            "who": who,
+            "us": (k.get("team") or {}).get("id") == TEAM_ID,
+        })
+
+    lineups = {}
+    for r in d.get("rosters", []):
+        side = "us" if r.get("team", {}).get("id") == TEAM_ID else "them"
+        lineups[side] = [
+            {"name": p.get("athlete", {}).get("displayName", ""),
+             "pos": (p.get("position") or {}).get("abbreviation", "")}
+            for p in r.get("roster", []) if p.get("starter")]
+
+    hl = {}
+    try:                                  # optional, curated, merge-only
+        with open("highlights.json") as f:
+            hl = json.load(f).get("highlights", {})
+    except (OSError, ValueError):
+        pass
+
+    return {"yt": (hl.get(m["id"]) or {}).get("yt"),
+            "search": "https://www.youtube.com/results?search_query=" + urllib.parse.quote(
+                f"Wrexham {m['opponent']} highlights"),
+            "match": {"opponent": m["opponent"], "logo": m["logo"], "home": m["home"],
+                      "us": m["us"], "them": m["them"], "date": m["date"],
+                      "comp": m["comp"], "result": m["result"]},
+            "stats": stats, "events": goals, "lineups": lineups}
+
+
 # --- promotion projection -----------------------------------------------------
 def project(table, matches):
     us = next((r for r in table if r["isWrexham"]), None)
@@ -263,8 +342,56 @@ def project(table, matches):
         "cutoff": PLAYOFF_CUTOFF,
         "neededPpg": round(max(0, PLAYOFF_CUTOFF - points) / remaining, 2) if remaining else 0,
         "gapToSixth": (sixth["points"] - points) if sixth else None,
-        "form": [m["result"] for m in matches if m["completed"]][-5:],
+        "form": [m["result"] for m in matches
+                 if m["completed"] and m["comp"] == "League"][-5:],
     }
+
+
+DIR = os.path.dirname(os.path.abspath(__file__))
+
+
+def vevent(m):
+    """One VEVENT. Commas are separators in ICS, so they're stripped, not escaped."""
+    dt = datetime.fromisoformat(m["date"])
+    start = dt.strftime("%Y%m%dT%H%M00Z")
+    end = (dt + timedelta(hours=2)).strftime("%Y%m%dT%H%M00Z")
+    vs = f"Wrexham v {m['opponent']}" if m["home"] else f"{m['opponent']} v Wrexham"
+    tag = "" if m["comp"] == "League" else f" ({m['comp']})"
+    return ["BEGIN:VEVENT", f"UID:{m['id']}@wrexham-tracker",
+            f"DTSTART:{start}", f"DTEND:{end}",
+            f"SUMMARY:{vs} \u26bd{tag}".replace(",", ""),
+            "LOCATION:" + (m.get("venue") or "").replace(",", " "),
+            f"DESCRIPTION:{m['comp']} 2026/27".replace(",", ""), "END:VEVENT"]
+
+
+def write_ics(matches):
+    """Real .ics files -- iOS Safari cannot download a data: URI -- plus one
+    subscribable all-fixtures feed, so a fan subscribes once instead of adding
+    46 matches by hand."""
+    icsdir = os.path.join(DIR, "ics")
+    os.makedirs(icsdir, exist_ok=True)
+    keep, feed = set(), []
+    for m in matches:
+        if m["completed"]:
+            continue
+        try:
+            ev = vevent(m)
+        except Exception:
+            continue
+        feed += ev
+        fn = f"{m['id']}.ics"
+        keep.add(fn)
+        with open(os.path.join(icsdir, fn), "w", newline="") as f:
+            f.write("\r\n".join(["BEGIN:VCALENDAR", "VERSION:2.0",
+                                  "PRODID:wrexham-tracker"] + ev + ["END:VCALENDAR"]))
+    keep.add("wrexham.ics")
+    with open(os.path.join(icsdir, "wrexham.ics"), "w", newline="") as f:
+        f.write("\r\n".join(["BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:wrexham-tracker",
+                              "X-WR-CALNAME:Wrexham AFC fixtures", "X-PUBLISHED-TTL:PT12H"]
+                             + feed + ["END:VCALENDAR"]))
+    for f in os.listdir(icsdir):          # prune fixtures already played
+        if f.endswith(".ics") and f not in keep:
+            os.remove(os.path.join(icsdir, f))
 
 
 def main():
@@ -280,10 +407,12 @@ def main():
         "podcasts": fetch_podcasts(),
         "projection": project(table, matches),
         "odds": fetch_odds(matches),
+        "lastMatch": fetch_summary(matches),
     }
-    with open("data.json", "w") as f:
+    write_ics(matches)
+    with open(os.path.join(DIR, "data.json"), "w") as f:
         json.dump(data, f, separators=(",", ":"))
-    print(f"matches={len(matches)} table={len(table)} news={len(data['news'])} "
+    print(f"matches={len(matches)} (league={sum(1 for m in matches if m['comp']=='League')}) table={len(table)} news={len(data['news'])} "
           f"pods={len(data['podcasts'])} odds={len(data['odds'])}")
 
 

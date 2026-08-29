@@ -17,7 +17,7 @@ def test_rfc822():
 def test_projection():
     table = [{"rank": i, "team": f"T{i}", "played": 10, "points": 30 - i,
               "isWrexham": i == 10} for i in range(1, 25)]
-    matches = [{"completed": True, "result": r} for r in "WWDLW"]
+    matches = [{"completed": True, "result": r, "comp": "League"} for r in "WWDLW"]
     p = f.project(table, matches)
     assert p["played"] == 10 and p["points"] == 20
     assert p["ppg"] == 2.0
@@ -25,6 +25,10 @@ def test_projection():
     assert p["projected"] == 92
     assert p["gapToSixth"] == 4          # 6th has 24, we have 20
     assert p["form"] == ["W", "W", "D", "L", "W"]
+
+    # A cup tie must not enter league form -- it is not part of the promotion picture.
+    withcup = matches + [{"completed": True, "result": "L", "comp": "EFL Cup"}]
+    assert f.project(table, withcup)["form"] == ["W", "W", "D", "L", "W"]
     assert p["tooEarly"] is False
 
     early = f.project([{"rank": 1, "team": "T", "played": 3, "points": 2,
@@ -35,6 +39,17 @@ def test_projection():
                        "isWrexham": False}], matches) is None
 
 
+def test_safe_url():
+    assert f.safe_url("https://a.example/x") == "https://a.example/x"
+    # http media is mixed content on an HTTPS page, so it is upgraded, not dropped
+    assert f.safe_url("http://a.example/x.mp3") == "https://a.example/x.mp3"
+    # esc() does not neutralise a scheme, so these must never reach an href
+    assert f.safe_url("javascript:alert(1)") == ""
+    assert f.safe_url("data:text/html,<script>") == ""
+    assert f.safe_url("  JAVASCRIPT:alert(1)") == ""
+    assert f.safe_url(None) == ""
+
+
 def test_strip_html():
     assert f.strip_html("<p>Hello  <b>world</b></p>") == "Hello world"
     assert f.strip_html("Caf&eacute; &amp; bar") == "Café & bar"
@@ -42,5 +57,5 @@ def test_strip_html():
 
 
 if __name__ == "__main__":
-    test_rfc822(); test_projection(); test_strip_html()
+    test_rfc822(); test_projection(); test_safe_url(); test_strip_html()
     print("ok")

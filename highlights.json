@@ -1,0 +1,4 @@
+{
+  "_howto": "Match id (ESPN event id, shown in data.json) -> {\"yt\": \"<YouTube video id>\"}. Use OFFICIAL uploads only. Verify with https://www.youtube.com/oembed?url=https://youtu.be/<id>&format=json and check author_url, NOT author_name -- a spam channel can rename itself to spoof the name.",
+  "highlights": {}
+}
