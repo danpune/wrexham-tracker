@@ -17,6 +17,7 @@ dependencies, no external fonts.
 | League table | ESPN `soccer/eng.2` standings | free |
 | News | Google News RSS | free |
 | Podcasts | Public podcast RSS (#AskWXM, Me the Wife and Wrexham AFC, Rousey's, BBC Sounds) | free |
+| Odds | Polymarket per-fixture 3-way markets | free |
 | Visitors | hits.sh badge | free, no signup |
 
 ## Notes
@@ -29,6 +30,13 @@ dependencies, no external fonts.
   three is noise. It is not a simulation.
 - Kick-off times render in `Europe/London` regardless of where the viewer is.
 - League matches only — cup runs aren't included.
+- Odds come from Polymarket, matched per fixture (a generic "Wrexham" search only ranks up
+  *resolved* past events). Kalshi lists the same fixtures under `KXEFLCHAMPIONSHIPGAME` but every
+  contract is quoteless — no bid, ask or open interest — so it is deliberately not wired in.
+- Display only: there is no trading integration and nothing on the site is betting advice.
+- Feed URLs are filtered to http(s) at fetch time. HTML-escaping does not neutralise a
+  `javascript:` scheme, and news/podcast links are third-party.
+- No preload hint on `data.json`: `as="fetch"` mode-mismatches `fetch()` and doubles the download.
 
 ## Develop
 
