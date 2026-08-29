@@ -122,7 +122,10 @@ footer{border-top:1px solid var(--line);margin-top:26px;padding:18px 0 30px;
   font-size:12px;color:var(--mut);text-align:center;line-height:2}
 footer img{vertical-align:middle;margin-top:5px;min-height:20px}
 footer .fb{color:var(--red);font-weight:600}
-.crest{width:22px;height:22px;object-fit:contain;flex:0 0 22px}
+/* many club crests are dark; a light chip keeps them visible on a dark ground */
+.crest{width:22px;height:22px;object-fit:contain;flex:0 0 22px;
+  background:rgba(255,255,255,.09);border-radius:5px;padding:2px}
+.crest.lg{border-radius:9px;padding:4px}
 .crest.lg{width:34px;height:34px;flex:0 0 34px}
 .cbadge{font-size:9px;font-weight:800;letter-spacing:.5px;text-transform:uppercase;
   color:#ffd166;border:1px solid #4a3d1a;background:#241f10;border-radius:4px;padding:2px 5px}
@@ -181,6 +184,7 @@ footer .fb{color:var(--red);font-weight:600}
   <button class="tab" role="tab" aria-selected="false" data-p="table">Table</button>
   <button class="tab" role="tab" aria-selected="false" data-p="centre">Match</button>
   <button class="tab" role="tab" aria-selected="false" data-p="promo">Chances</button>
+  <button class="tab" role="tab" aria-selected="false" data-p="squad">Squad</button>
   <button class="tab" role="tab" aria-selected="false" data-p="news">News</button>
   <button class="tab" role="tab" aria-selected="false" data-p="pods">Podcasts</button>
 </div></nav>
@@ -190,6 +194,7 @@ footer .fb{color:var(--red);font-weight:600}
   <section id="table" hidden></section>
   <section id="promo" hidden></section>
   <section id="centre" hidden></section>
+  <section id="squad" hidden></section>
   <section id="news" hidden></section>
   <section id="pods" hidden></section>
 </main>
@@ -240,7 +245,7 @@ function tabs(){
   });
 }
 
-function hero(d){
+function hero(d){  // d used for nextInfo below
   const played = d.matches.filter(m => m.completed);
   const last = played[played.length - 1];
   if (last){
@@ -262,7 +267,10 @@ function hero(d){
     <div class="opp"><img class="crest" src="${esc(next.logo)}" alt="" loading="lazy"> ${next.home ? "vs" : "at"} <b>${esc(next.opponent)}</b>
       ${next.comp !== "League" ? `<span class="cbadge">${esc(next.comp)}</span>` : ""}</div>
     <div class="next-when">${when}${differs ? ` &middot; ${mine} your time` : ""}</div>
-    <div><a class="olink" href="ics/${esc(next.id)}.ics">&#128197; Add to calendar</a></div>`;
+    ${d.nextInfo && d.nextInfo.tv.length ? `<div class="opp" style="margin-top:6px">&#128250; ${d.nextInfo.tv.map(esc).join(", ")}</div>` : ""}
+    ${d.nextInfo && d.nextInfo.h2h ? `<div class="opp" style="font-size:12px">${esc(d.nextInfo.h2h)}</div>` : ""}
+    <div><a class="olink" href="ics/${esc(next.id)}.ics">&#128197; Add to calendar</a>
+      <a class="olink" style="margin-left:12px" href="ics/wrexham.ics">Subscribe to all fixtures</a></div>`;
   const tick = () => {
     let s = (dt - Date.now()) / 1000;
     if (s <= 0){ $("#cd").textContent = "Kick-off"; return clearInterval(iv); }
@@ -409,6 +417,18 @@ function odds(d){
      Display only. This site has no trading integration and nothing here is betting or financial advice.</div>`;
 }
 
+function squad(d){
+  const POS = {G: "Goalkeepers", D: "Defenders", M: "Midfielders", F: "Forwards"};
+  let html = "", seen = "";
+  for (const p of d.squad){
+    if (p.pos !== seen){ html += `<div class="mnth">${POS[p.pos] || "Squad"}</div>`; seen = p.pos; }
+    html += `<div class="mrow"><div class="mdate" style="width:30px;flex:0 0 30px"><b>${esc(String(p.no))}</b></div>
+      <div class="mopp">${esc(p.name)}</div>
+      ${p.age ? `<div class="mres" style="font-size:12px;color:var(--mut)">${p.age}</div>` : ""}</div>`;
+  }
+  $("#squad").innerHTML = html || "<div class='skel'>Squad unavailable.</div>";
+}
+
 function news(d){
   $("#news").innerHTML = d.news.map(n => `<a class="item" href="${esc(n.url)}" target="_blank" rel="noopener">
     <div class="meta"><span class="src">${esc(n.source)}</span><span>${ago(n.published)}</span></div>
@@ -430,7 +450,7 @@ fetch("data.json").then(r => r.json()).then(d => {
   const done = lg.filter(m => m.completed).length, total = lg.length;
   $("#prog").textContent = `${done} played \u00b7 ${total - done} to go`;
   $("#sbarfill").style.width = (done / total * 100) + "%";
-  hero(d); fixtures(d); table(d); centre(d); promo(d); news(d); pods(d);
+  hero(d); fixtures(d); table(d); centre(d); promo(d); squad(d); news(d); pods(d);
   $("#stamp").textContent = "Updated " + ago(d.updated);
   tabs();
 }).catch(() => { $("#fixtures").innerHTML = "<div class='skel'>Couldn&rsquo;t load data. Try a refresh.</div>"; });

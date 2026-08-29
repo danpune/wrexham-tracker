@@ -320,6 +320,48 @@ def fetch_summary(matches):
             "stats": stats, "events": goals, "lineups": lineups}
 
 
+def fetch_next_info(matches):
+    """Broadcast + head-to-head for the next fixture. Where-to-watch matters a
+    lot here: much of Wrexham's audience found the club through the series and
+    is watching from outside the UK."""
+    nxt = next((m for m in matches if not m["completed"]), None)
+    if not nxt:
+        return None
+    try:
+        d = get(f"https://site.api.espn.com/apis/site/v2/sports/soccer/{nxt['league']}"
+                f"/summary?event={nxt['id']}", as_json=True)
+    except Exception:
+        return None
+    tv = []
+    for b in d.get("broadcasts", []):
+        name = (b.get("media") or {}).get("shortName") or ""
+        if name and name not in tv:
+            tv.append(name)
+    h2h = next((x.get("summary") for x in (d.get("seasonseries") or [])
+                if x.get("type") == "head-to-head"), None)
+    return {"tv": tv[:4], "h2h": h2h}
+
+
+def fetch_squad():
+    try:
+        d = get(f"https://site.api.espn.com/apis/site/v2/sports/soccer/{LEAGUE}"
+                f"/teams/{TEAM_ID}/roster", as_json=True)
+    except Exception:
+        return []
+    out = []
+    for a in d.get("athletes", []):
+        it = a if "displayName" in a else (a.get("items") or [{}])[0]
+        if not it.get("displayName"):
+            continue
+        out.append({"no": it.get("jersey") or "",
+                    "name": it["displayName"],
+                    "pos": (it.get("position") or {}).get("abbreviation", ""),
+                    "age": it.get("age")})
+    order = {"G": 0, "D": 1, "M": 2, "F": 3}
+    out.sort(key=lambda p: (order.get(p["pos"], 4), p["name"]))
+    return out
+
+
 # --- promotion projection -----------------------------------------------------
 def project(table, matches):
     us = next((r for r in table if r["isWrexham"]), None)
@@ -408,12 +450,14 @@ def main():
         "projection": project(table, matches),
         "odds": fetch_odds(matches),
         "lastMatch": fetch_summary(matches),
+        "nextInfo": fetch_next_info(matches),
+        "squad": fetch_squad(),
     }
     write_ics(matches)
     with open(os.path.join(DIR, "data.json"), "w") as f:
         json.dump(data, f, separators=(",", ":"))
     print(f"matches={len(matches)} (league={sum(1 for m in matches if m['comp']=='League')}) table={len(table)} news={len(data['news'])} "
-          f"pods={len(data['podcasts'])} odds={len(data['odds'])}")
+          f"pods={len(data['podcasts'])} odds={len(data['odds'])} squad={len(data['squad'])}")
 
 
 if __name__ == "__main__":
