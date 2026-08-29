@@ -30,11 +30,14 @@ jobs:
       - name: Fetch data
         run: python fetch_data.py
 
+      - name: Fill official highlights (fail-safe — merge-only, ok if YouTube blocks CI)
+        run: python build_highlights.py || true
+
       - name: Commit if changed
         run: |
           git config user.name  "wxm-bot"
           git config user.email "actions@users.noreply.github.com"
-          git add data.json
+          git add data.json highlights.json
           git diff --staged --quiet || git commit -m "Update data $(date -u +%FT%TZ)"
           git pull --rebase origin main
           git push

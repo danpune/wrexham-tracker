@@ -114,6 +114,13 @@ def fetch_matches():
                 "state": status.get("detail", ""),
             })
     out.sort(key=lambda m: m["date"])
+    try:
+        with open(os.path.join(DIR, "highlights.json")) as f:
+            hl = json.load(f).get("highlights", {})
+    except (OSError, ValueError):
+        hl = {}
+    for m in out:
+        m["yt"] = (hl.get(m["id"]) or {}).get("yt")
     return out
 
 
@@ -312,7 +319,7 @@ def fetch_summary(matches):
     except (OSError, ValueError):
         pass
 
-    return {"yt": (hl.get(m["id"]) or {}).get("yt"),
+    return {"yt": m.get("yt") or (hl.get(m["id"]) or {}).get("yt"),
             "search": "https://www.youtube.com/results?search_query=" + urllib.parse.quote(
                 f"Wrexham {m['opponent']} highlights"),
             "match": {"opponent": m["opponent"], "logo": m["logo"], "home": m["home"],
