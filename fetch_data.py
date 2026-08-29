@@ -320,6 +320,45 @@ def fetch_summary(matches):
             "stats": stats, "events": goals, "lineups": lineups}
 
 
+# WMO weather codes -> a short label. Open-Meteo is free and needs no key.
+WMO = {0: ("Clear", "\u2600\ufe0f"), 1: ("Mostly clear", "\U0001f324\ufe0f"),
+       2: ("Partly cloudy", "\u26c5"), 3: ("Overcast", "\u2601\ufe0f"),
+       45: ("Fog", "\U0001f32b\ufe0f"), 48: ("Fog", "\U0001f32b\ufe0f"),
+       51: ("Drizzle", "\U0001f327\ufe0f"), 53: ("Drizzle", "\U0001f327\ufe0f"),
+       55: ("Drizzle", "\U0001f327\ufe0f"), 61: ("Rain", "\U0001f327\ufe0f"),
+       63: ("Rain", "\U0001f327\ufe0f"), 65: ("Heavy rain", "\U0001f327\ufe0f"),
+       71: ("Snow", "\U0001f328\ufe0f"), 73: ("Snow", "\U0001f328\ufe0f"),
+       75: ("Heavy snow", "\U0001f328\ufe0f"), 80: ("Showers", "\U0001f326\ufe0f"),
+       81: ("Showers", "\U0001f326\ufe0f"), 82: ("Heavy showers", "\U0001f327\ufe0f"),
+       95: ("Storm", "\u26c8\ufe0f"), 96: ("Storm", "\u26c8\ufe0f"), 99: ("Storm", "\u26c8\ufe0f")}
+
+
+def fetch_weather(city, when):
+    """Kickoff forecast for the venue city. Baked in here rather than fetched in
+    the browser: one call every 30 minutes instead of one per visitor, and the
+    page needs no extra CSP origin. Open-Meteo only forecasts ~16 days out."""
+    if not city:
+        return None
+    try:
+        g = get("https://geocoding-api.open-meteo.com/v1/search?count=1&language=en"
+                "&name=" + urllib.parse.quote(city), as_json=True)
+        hit = (g.get("results") or [None])[0]
+        if not hit:
+            return None
+        w = get(f"https://api.open-meteo.com/v1/forecast?latitude={hit['latitude']}"
+                f"&longitude={hit['longitude']}&hourly=temperature_2m,weather_code"
+                f"&start_date={when[:10]}&end_date={when[:10]}&timezone=GMT", as_json=True)
+        hourly = w.get("hourly") or {}
+        times = hourly.get("time") or []
+        i = next((n for n, t in enumerate(times) if t[:13] >= when[:13]), None)
+        if i is None:
+            return None
+        label, icon = WMO.get(hourly["weather_code"][i], ("", "\U0001f321\ufe0f"))
+        return {"temp": round(hourly["temperature_2m"][i]), "label": label, "icon": icon}
+    except Exception:
+        return None
+
+
 def fetch_next_info(matches):
     """Broadcast + head-to-head for the next fixture. Where-to-watch matters a
     lot here: much of Wrexham's audience found the club through the series and
@@ -339,7 +378,9 @@ def fetch_next_info(matches):
             tv.append(name)
     h2h = next((x.get("summary") for x in (d.get("seasonseries") or [])
                 if x.get("type") == "head-to-head"), None)
-    return {"tv": tv[:4], "h2h": h2h}
+    city = ((d.get("gameInfo") or {}).get("venue") or {}).get("address", {}).get("city")
+    return {"tv": tv[:4], "h2h": h2h, "venue": nxt.get("venue"), "city": city,
+            "weather": fetch_weather(city, nxt["date"])}
 
 
 def fetch_squad():

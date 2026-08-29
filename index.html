@@ -196,6 +196,7 @@ footer .fb{color:var(--red);font-weight:600}
   <button class="tab" role="tab" aria-selected="false" data-p="squad">Squad</button>
   <button class="tab" role="tab" aria-selected="false" data-p="news">News</button>
   <button class="tab" role="tab" aria-selected="false" data-p="pods">Podcasts</button>
+  <button class="tab" role="tab" aria-selected="false" data-p="info">About</button>
 </div></nav>
 
 <main class="wrap">
@@ -206,6 +207,7 @@ footer .fb{color:var(--red);font-weight:600}
   <section id="squad" hidden></section>
   <section id="news" hidden></section>
   <section id="pods" hidden></section>
+  <section id="info" hidden></section>
 </main>
 
 <footer><div class="wrap">
@@ -276,7 +278,8 @@ function hero(d){  // d used for nextInfo below
     <div class="opp"><img class="crest" src="${esc(next.logo)}" alt="" loading="lazy"> ${next.home ? "vs" : "at"} <b>${esc(next.opponent)}</b>
       ${next.comp !== "League" ? `<span class="cbadge">${esc(next.comp)}</span>` : ""}</div>
     <div class="next-when">${when}${differs ? ` &middot; ${mine} your time` : ""}</div>
-    ${d.nextInfo && d.nextInfo.tv.length ? `<div class="opp" style="margin-top:6px">&#128250; ${d.nextInfo.tv.map(esc).join(", ")}</div>` : ""}
+    ${d.nextInfo && d.nextInfo.weather ? `<div class="opp" style="margin-top:6px">${d.nextInfo.weather.icon} ${d.nextInfo.weather.temp}&deg;C ${esc(d.nextInfo.weather.label)}${d.nextInfo.venue ? " &middot; " + esc(d.nextInfo.venue) : ""}</div>` : ""}
+    ${d.nextInfo && d.nextInfo.tv.length ? `<div class="opp">&#128250; ${d.nextInfo.tv.map(esc).join(", ")}</div>` : ""}
     ${d.nextInfo && d.nextInfo.h2h ? `<div class="opp" style="font-size:12px">${esc(d.nextInfo.h2h)}</div>` : ""}
     <div><a class="olink" href="ics/${esc(next.id)}.ics">&#128197; Add to calendar</a>
       <a class="olink" style="margin-left:12px" href="ics/wrexham.ics">Subscribe to all fixtures</a></div>`;
@@ -396,6 +399,8 @@ function centre(d){
       ${bar("Fouls", us.foulsCommitted, them.foulsCommitted)}
     </div>
     ${video}
+    <div><button class="olink" id="sharebtn" style="background:none;border:0;cursor:pointer;font-family:inherit;padding:0">
+      &#8599; Share this result</button></div>
   </div>
   <div class="card"><h2>Starting XI</h2><div class="xi">${xi("us")}${xi("them")}</div></div>`;
 }
@@ -426,6 +431,51 @@ function odds(d){
      Display only. This site has no trading integration and nothing here is betting or financial advice.</div>`;
 }
 
+function shareResult(d){
+  const L = d.lastMatch; if (!L) return;
+  const m = L.match, W = 1200, H = 630;
+  const c = document.createElement("canvas"); c.width = W; c.height = H;
+  const x = c.getContext("2d");
+  x.fillStyle = "#0d0f12"; x.fillRect(0, 0, W, H);
+  x.fillStyle = "#e0242f"; x.fillRect(0, 0, W, 9);
+  const F = (s, w) => `${w} ${s}px -apple-system, Helvetica, Arial, sans-serif`;
+
+  x.fillStyle = "#8b929e"; x.font = F(28, 700);
+  x.fillText(`${m.comp.toUpperCase()}  ·  ${new Date(m.date).toLocaleDateString("en-GB",
+    {timeZone:"Europe/London", day:"numeric", month:"long"}).toUpperCase()}`, 80, 120);
+
+  x.fillStyle = "#e9ecf1"; x.font = F(62, 800);
+  x.fillText("WREXHAM", 80, 250);
+  x.fillText(m.opponent.toUpperCase().slice(0, 22), 80, 400);
+
+  x.font = F(96, 800); x.textAlign = "right";
+  // only our score carries the result colour; colouring both reads as ambiguous
+  x.fillStyle = m.result === "W" ? "#2ea043" : m.result === "L" ? "#e0242f" : "#8b929e";
+  x.fillText(String(m.us), W - 90, 255);
+  x.fillStyle = "#e9ecf1";
+  x.fillText(String(m.them), W - 90, 405);
+  x.textAlign = "left";
+
+  x.fillStyle = "#8b929e"; x.font = F(26, 700);
+  x.fillText(m.home ? "at the Racecourse Ground" : "away", 80, 470);
+  x.fillStyle = "#e0242f"; x.font = F(24, 700);
+  x.fillText("danpune.github.io/wrexham-tracker", 80, 552);
+
+  c.toBlob(blob => {
+    if (!blob) return;
+    const file = new File([blob], "wrexham-result.png", {type: "image/png"});
+    if (navigator.canShare && navigator.canShare({files: [file]})){
+      navigator.share({files: [file], title: "Wrexham", text: `Wrexham ${m.us}-${m.them} ${m.opponent}`})
+        .catch(() => {});                                  // user dismissed the sheet
+    } else {
+      const url = URL.createObjectURL(blob), a = document.createElement("a");
+      a.href = url; a.download = "wrexham-result.png";
+      document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 6000);
+    }
+  }, "image/png");
+}
+
 function squad(d){
   const POS = {G: "Goalkeepers", D: "Defenders", M: "Midfielders", F: "Forwards"};
   let html = "", seen = "";
@@ -453,6 +503,44 @@ function pods(d){
   </div>`).join("");
 }
 
+function info(d){
+  const when = new Date(d.updated).toLocaleString("en-GB", {...UK, dateStyle:"medium", timeStyle:"short"});
+  $("#info").innerHTML = `
+  <div class="card"><h2>What this is</h2>
+    <div class="note" style="margin-top:8px">A single page for following Wrexham: when they next play,
+    how the last game went, where they sit, and what the market and the numbers make of the season.
+    No ads, no accounts, no tracking. It costs nothing to run.</div></div>
+
+  <div class="card" style="margin-top:10px"><h2>Where the numbers come from</h2>
+    <div class="note" style="margin-top:8px">
+      <b>Fixtures, table, match stats, squad, TV</b> &mdash; ESPN's public feed (league, EFL Cup, FA Cup).<br>
+      <b>News</b> &mdash; Google News RSS.<br>
+      <b>Podcasts</b> &mdash; the shows' own public RSS feeds.<br>
+      <b>Odds</b> &mdash; live Polymarket markets. Kalshi lists the same fixtures but has no quotes on them.<br>
+      <b>Kickoff weather</b> &mdash; Open-Meteo, for the venue city.<br>
+      Refreshed every 30 minutes. Last update: <b>${esc(when)}</b> UK.</div></div>
+
+  <div class="card" style="margin-top:10px"><h2>What the projection is and isn't</h2>
+    <div class="note" style="margin-top:8px">The season projection is a straight-line points-per-game
+    extrapolation against the historical ~72-point playoff cut. It is not a simulation, and it stays
+    hidden until 8 games are played because extrapolating from three is noise.
+    Odds are shown for information only &mdash; there is no trading integration here, and nothing on
+    this site is betting or financial advice.</div></div>
+
+  <div class="card" style="margin-top:10px"><h2>Privacy</h2>
+    <div class="note" style="margin-top:8px">No cookies, no accounts, no cross-site tracking, no ad
+    networks. The only counter is a hits.sh badge in the footer, which is an aggregate page-view
+    number and nothing else. Crest images, podcast audio and any highlights video load from their
+    own hosts when you view them.</div></div>
+
+  <div class="card" style="margin-top:10px"><h2>Open source</h2>
+    <div class="note" style="margin-top:8px">Everything &mdash; the page, the fetcher and the workflow
+    &mdash; is at <a href="https://github.com/danpune/wrexham-tracker" target="_blank"
+    rel="noopener noreferrer" style="color:var(--red);font-weight:600">github.com/danpune/wrexham-tracker</a>.
+    Spot something wrong? <a href="https://github.com/danpune/wrexham-tracker/issues/new?title=Feedback"
+    target="_blank" rel="noopener noreferrer" style="color:var(--red);font-weight:600">Open an issue</a>.</div></div>`;
+}
+
 fetch("data.json").then(r => r.json()).then(d => {
   $("#comp").textContent = d.competition + " " + d.season;
   const lg = d.matches.filter(m => m.comp === "League");   // cups don't belong in league progress
@@ -460,6 +548,8 @@ fetch("data.json").then(r => r.json()).then(d => {
   $("#prog").textContent = `${done} played \u00b7 ${total - done} to go`;
   $("#sbarfill").style.width = (done / total * 100) + "%";
   hero(d); fixtures(d); table(d); centre(d); promo(d); squad(d); news(d); pods(d);
+  info(d);
+  const sb = $("#sharebtn"); if (sb) sb.onclick = () => shareResult(d);
   $("#stamp").textContent = "Updated " + ago(d.updated);
   tabs();
 }).catch(() => { $("#fixtures").innerHTML = "<div class='skel'>Couldn&rsquo;t load data. Try a refresh.</div>"; });
