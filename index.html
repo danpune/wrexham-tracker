@@ -1,0 +1,292 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Wrexham Tracker — Championship 2026/27</title>
+<meta name="description" content="Wrexham AFC fixtures, results, Championship table, promotion projection, news and podcasts. Updated hourly.">
+<meta name="theme-color" content="#0d0f12">
+<link rel="preload" href="data.json" as="fetch" crossorigin>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#0d0f12; --panel:#15181d; --panel2:#1b1f26; --line:#262b33;
+  --tx:#e9ecf1; --mut:#8b929e; --red:#e0242f; --red-dim:#7a1a20;
+  --w:#2ea043; --d:#8b929e; --l:#e0242f;
+  --pad:16px;
+}
+html{-webkit-text-size-adjust:100%}
+body{
+  background:var(--bg); color:var(--tx);
+  font:16px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  padding-bottom:env(safe-area-inset-bottom);
+}
+.wrap{max-width:720px;margin:0 auto;padding:0 var(--pad)}
+a{color:inherit;text-decoration:none}
+
+/* header */
+header{padding:22px 0 14px;border-bottom:1px solid var(--line)}
+.mark{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap}
+.mark h1{font-size:22px;font-weight:800;letter-spacing:-.4px}
+.mark h1 span{color:var(--red)}
+.badge{font-size:11px;font-weight:700;letter-spacing:.6px;text-transform:uppercase;
+  color:var(--mut);border:1px solid var(--line);border-radius:999px;padding:3px 9px}
+
+/* hero: the two things a fan actually opened this for */
+.hero{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:16px 0}
+@media(max-width:520px){.hero{grid-template-columns:1fr}}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:14px}
+.card h2{font-size:11px;font-weight:700;letter-spacing:.7px;text-transform:uppercase;color:var(--mut);margin-bottom:9px}
+.score{font-size:30px;font-weight:800;letter-spacing:-1px;line-height:1.1}
+.opp{color:var(--mut);font-size:14px;margin-top:4px}
+.count{font-size:26px;font-weight:800;letter-spacing:-.5px;font-variant-numeric:tabular-nums}
+.next-when{color:var(--red);font-size:13px;font-weight:600;margin-top:5px}
+
+/* form pills */
+.form{display:flex;gap:5px;margin-top:11px}
+.pill{width:23px;height:23px;border-radius:6px;display:grid;place-items:center;
+  font-size:12px;font-weight:800;color:#fff}
+.pill.W{background:var(--w)} .pill.D{background:#3a4049} .pill.L{background:var(--l)}
+
+/* tabs */
+nav{position:sticky;top:0;z-index:9;background:rgba(13,15,18,.93);
+  backdrop-filter:blur(10px);border-bottom:1px solid var(--line);margin-top:4px}
+.tabs{display:flex;gap:2px;overflow-x:auto;scrollbar-width:none;max-width:720px;margin:0 auto;padding:0 var(--pad)}
+.tabs::-webkit-scrollbar{display:none}
+.tab{flex:0 0 auto;padding:13px 12px;font-size:14px;font-weight:600;color:var(--mut);
+  border-bottom:2px solid transparent;cursor:pointer;background:none;border-top:0;border-left:0;border-right:0;font-family:inherit}
+.tab[aria-selected=true]{color:var(--tx);border-bottom-color:var(--red)}
+
+section{padding:18px 0 8px}
+section[hidden]{display:none}
+
+/* fixtures */
+.mrow{display:flex;align-items:center;gap:11px;padding:11px 12px;border-radius:11px;
+  background:var(--panel);border:1px solid var(--line);margin-bottom:7px}
+.mrow.is-next{border-color:var(--red-dim);background:linear-gradient(180deg,#1c1418,var(--panel))}
+.mdate{width:52px;flex:0 0 52px;font-size:11px;color:var(--mut);line-height:1.3;font-variant-numeric:tabular-nums}
+.mdate b{display:block;font-size:15px;color:var(--tx);font-weight:700}
+.mopp{flex:1;min-width:0;font-size:15px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.mopp i{font-style:normal;color:var(--mut);font-weight:600;font-size:12px}
+.mres{font-size:15px;font-weight:800;font-variant-numeric:tabular-nums}
+.mtag{font-size:10px;font-weight:800;letter-spacing:.5px;color:var(--red);text-transform:uppercase}
+.mnth{font-size:11px;font-weight:700;letter-spacing:.8px;text-transform:uppercase;
+  color:var(--mut);margin:16px 0 8px}
+.mnth:first-child{margin-top:0}
+
+/* table */
+table{width:100%;border-collapse:collapse;font-size:14px;font-variant-numeric:tabular-nums}
+th{font-size:10px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;color:var(--mut);
+  text-align:right;padding:0 0 8px}
+th:nth-child(2){text-align:left}
+td{padding:9px 0;border-top:1px solid var(--line);text-align:right}
+td:nth-child(2){text-align:left;font-weight:600}
+td:first-child{width:26px;color:var(--mut);font-size:12px}
+tr.wxm td{background:rgba(224,36,47,.11);font-weight:700}
+tr.wxm td:nth-child(2){box-shadow:inset 3px 0 0 var(--red)}
+tr.line td{border-top:2px solid var(--red-dim)}
+.tkey{font-size:12px;color:var(--mut);margin-top:12px;line-height:1.7}
+.tkey b{color:var(--tx)}
+.hide-sm{}
+@media(max-width:520px){.hide-sm{display:none}}
+
+/* promotion */
+.big{font-size:38px;font-weight:800;letter-spacing:-1.5px;line-height:1.1}
+.bar{height:9px;background:var(--panel2);border-radius:6px;overflow:hidden;margin:13px 0 7px;position:relative}
+.bar i{display:block;height:100%;background:var(--red);border-radius:6px}
+.bar u{position:absolute;top:-3px;bottom:-3px;width:2px;background:var(--tx);opacity:.65}
+.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:14px}
+.stat{background:var(--panel2);border-radius:10px;padding:11px}
+.stat b{display:block;font-size:19px;font-weight:800;font-variant-numeric:tabular-nums}
+.stat span{font-size:11px;color:var(--mut);text-transform:uppercase;letter-spacing:.4px}
+.note{font-size:13px;color:var(--mut);line-height:1.6;margin-top:13px}
+
+/* news + podcasts */
+.item{display:block;background:var(--panel);border:1px solid var(--line);border-radius:11px;
+  padding:13px;margin-bottom:8px}
+.item:active{background:var(--panel2)}
+.meta{display:flex;gap:8px;align-items:center;font-size:11px;color:var(--mut);margin-bottom:5px;flex-wrap:wrap}
+.src{color:var(--red);font-weight:700;text-transform:uppercase;letter-spacing:.4px}
+.item h3{font-size:15px;font-weight:600;line-height:1.4}
+.item p{font-size:13px;color:var(--mut);margin-top:5px;line-height:1.5}
+audio{width:100%;margin-top:10px;height:34px}
+
+footer{border-top:1px solid var(--line);margin-top:26px;padding:18px 0 30px;
+  font-size:12px;color:var(--mut);text-align:center;line-height:2}
+footer img{vertical-align:middle;margin-top:5px}
+.skel{color:var(--mut);padding:26px 0;text-align:center;font-size:14px}
+</style>
+</head>
+<body>
+
+<header><div class="wrap">
+  <div class="mark">
+    <h1>WREXHAM<span>.</span>TRACKER</h1>
+    <span class="badge" id="comp">Championship 2026/27</span>
+  </div>
+  <div class="hero">
+    <div class="card" id="last"><h2>Last result</h2><div class="skel" style="padding:8px 0">—</div></div>
+    <div class="card" id="next"><h2>Next match</h2><div class="skel" style="padding:8px 0">—</div></div>
+  </div>
+</div></header>
+
+<nav><div class="tabs" role="tablist">
+  <button class="tab" role="tab" aria-selected="true"  data-p="fixtures">Fixtures</button>
+  <button class="tab" role="tab" aria-selected="false" data-p="table">Table</button>
+  <button class="tab" role="tab" aria-selected="false" data-p="promo">Promotion</button>
+  <button class="tab" role="tab" aria-selected="false" data-p="news">News</button>
+  <button class="tab" role="tab" aria-selected="false" data-p="pods">Podcasts</button>
+</div></nav>
+
+<main class="wrap">
+  <section id="fixtures"><div class="skel">Loading…</div></section>
+  <section id="table" hidden></section>
+  <section id="promo" hidden></section>
+  <section id="news" hidden></section>
+  <section id="pods" hidden></section>
+</main>
+
+<footer><div class="wrap">
+  <div id="stamp">—</div>
+  <div>Data: ESPN · Google News · public podcast feeds</div>
+  <a href="https://hits.sh/danpune.github.io/wrexham-tracker/"><img
+     src="https://hits.sh/danpune.github.io/wrexham-tracker.svg?style=flat-square&label=visitors&color=e0242f&labelColor=15181d"
+     alt="visitor count" height="20" width="112" loading="lazy"></a>
+</div></footer>
+
+<script>
+const $ = s => document.querySelector(s);
+const esc = s => (s||"").replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+// Kick-offs are UK events: always render them in UK time, never the viewer's
+// local clock, or a fan abroad sees the wrong day for an evening fixture.
+const UK = {timeZone: "Europe/London"};
+const ukTime  = d => d.toLocaleTimeString("en-GB", {...UK, hour:"2-digit", minute:"2-digit"});
+const ukDay   = d => d.toLocaleDateString("en-GB", {...UK, weekday:"short"});
+const ukDayNo = d => d.toLocaleDateString("en-GB", {...UK, day:"numeric"});
+const ukMonth = d => d.toLocaleDateString("en-GB", {...UK, month:"short", year:"numeric"});
+const ukFull  = d => d.toLocaleDateString("en-GB", {...UK, day:"numeric", month:"short"});
+
+function ago(iso){
+  const m = (Date.now() - new Date(iso)) / 6e4;
+  if (m < 60)   return Math.max(1, Math.round(m)) + "m ago";
+  if (m < 1440) return Math.round(m / 60) + "h ago";
+  return Math.round(m / 1440) + "d ago";
+}
+
+function tabs(){
+  document.querySelectorAll(".tab").forEach(t => t.onclick = () => {
+    document.querySelectorAll(".tab").forEach(x => x.setAttribute("aria-selected", x === t));
+    document.querySelectorAll("main section").forEach(s => s.hidden = s.id !== t.dataset.p);
+    scrollTo({top: 0, behavior: "smooth"});
+  });
+}
+
+function hero(d){
+  const played = d.matches.filter(m => m.completed);
+  const last = played[played.length - 1];
+  if (last){
+    const cls = last.result === "W" ? "--w" : last.result === "L" ? "--l" : "--d";
+    $("#last").innerHTML = `<h2>Last result</h2>
+      <div class="score" style="color:var(${cls})">${last.us}&ndash;${last.them}</div>
+      <div class="opp">${last.home ? "vs" : "at"} ${esc(last.opponent)} &middot; ${ukFull(new Date(last.date))}</div>
+      <div class="form">${d.projection.form.map(f => `<span class="pill ${f}">${f}</span>`).join("")}</div>`;
+  }
+  const next = d.matches.find(m => !m.completed);
+  if (!next){ $("#next").innerHTML = "<h2>Next match</h2><div class='opp'>Season complete</div>"; return; }
+  const dt = new Date(next.date);
+  const when = dt.toLocaleString("en-GB", {...UK, weekday:"short", day:"numeric", month:"short",
+                                           hour:"2-digit", minute:"2-digit"}) + " UK";
+  $("#next").innerHTML = `<h2>Next match</h2>
+    <div class="count" id="cd">&nbsp;</div>
+    <div class="opp">${next.home ? "vs" : "at"} <b>${esc(next.opponent)}</b></div>
+    <div class="next-when">${when}</div>`;
+  const tick = () => {
+    let s = (dt - Date.now()) / 1000;
+    if (s <= 0){ $("#cd").textContent = "Kick-off"; return clearInterval(iv); }
+    const dd = Math.floor(s/86400), hh = Math.floor(s%86400/3600), mm = Math.floor(s%3600/60);
+    $("#cd").textContent = dd ? `${dd}d ${hh}h ${mm}m` : `${hh}h ${mm}m ${Math.floor(s%60)}s`;
+  };
+  tick();
+  const iv = setInterval(tick, 1000);
+}
+
+function fixtures(d){
+  let html = "", month = "";
+  for (const m of d.matches){
+    const dt = new Date(m.date), mn = ukMonth(dt);
+    if (mn !== month){ html += `<div class="mnth">${mn}</div>`; month = mn; }
+    const isNext = m === d.matches.find(x => !x.completed);
+    const right = m.completed
+      ? `<div class="mres" style="color:var(--${m.result === "W" ? "w" : m.result === "L" ? "l" : "d"})">${m.us}&ndash;${m.them}</div>`
+      : isNext ? `<div class="mtag">Next</div>`
+      : `<div class="mdate" style="width:auto;text-align:right">${ukTime(dt)}</div>`;
+    html += `<div class="mrow${isNext ? " is-next" : ""}">
+      <div class="mdate"><b>${ukDayNo(dt)}</b>${ukDay(dt)}</div>
+      <div class="mopp">${esc(m.opponent)} <i>${m.home ? "(H)" : "(A)"}</i></div>${right}</div>`;
+  }
+  $("#fixtures").innerHTML = html;
+}
+
+function table(d){
+  const rows = d.table.map(r => {
+    const cls = [r.isWrexham ? "wxm" : "", (r.rank === 7 || r.rank === 22) ? "line" : ""].join(" ").trim();
+    return `<tr class="${cls}"><td>${r.rank}</td><td>${esc(r.team)}</td>
+      <td>${r.played}</td><td class="hide-sm">${r.won}</td><td class="hide-sm">${r.drawn}</td>
+      <td class="hide-sm">${r.lost}</td><td>${r.gd > 0 ? "+" : ""}${r.gd}</td><td>${r.points}</td></tr>`;
+  }).join("");
+  $("#table").innerHTML = `<table><thead><tr><th></th><th>Team</th><th>P</th>
+    <th class="hide-sm">W</th><th class="hide-sm">D</th><th class="hide-sm">L</th><th>GD</th><th>Pts</th></tr></thead>
+    <tbody>${rows}</tbody></table>
+    <div class="tkey">Line after 6th &mdash; <b>playoff cut</b>. Line after 21st &mdash; relegation.<br>
+    Top 2 promoted automatically; 3rd&ndash;6th enter the playoffs.</div>`;
+}
+
+function promo(d){
+  const p = d.projection;
+  const pct = Math.min(100, p.points / p.cutoff * 100);
+  const headline = p.tooEarly
+    ? `<div class="big">Too early</div>
+       <div class="note" style="margin-top:8px">Only ${p.played} games played. A points-per-game projection
+       this early is noise, so the forecast unlocks after 8 games.</div>`
+    : `<div class="big">${p.projected} pts</div>
+       <div class="note" style="margin-top:6px">projected final total &middot; playoff cut is around ${p.cutoff}</div>`;
+  $("#promo").innerHTML = `<div class="card">${headline}
+    <div class="bar"><i style="width:${pct}%"></i><u style="left:100%"></u></div>
+    <div class="note" style="margin-top:0">${p.points} pts banked of the ~${p.cutoff} that usually reaches the playoffs.</div>
+    <div class="stats">
+      <div class="stat"><b>${p.rank}${["th","st","nd","rd"][p.rank % 10 < 4 && Math.floor(p.rank/10) !== 1 ? p.rank % 10 : 0]}</b><span>Position</span></div>
+      <div class="stat"><b>${p.ppg}</b><span>Pts / game</span></div>
+      <div class="stat"><b>${p.neededPpg}</b><span>Needed / game</span></div>
+    </div>
+    <div class="note">
+      ${p.gapToSixth > 0 ? `<b style="color:var(--tx)">${p.gapToSixth} pts</b> behind 6th with ${p.remaining} to play.`
+                         : `<b style="color:var(--tx)">Inside the playoff places</b> with ${p.remaining} to play.`}<br>
+      Last season Wrexham finished 7th &mdash; two points short of the playoffs.<br>
+      This is a straight-line projection from current form, not a simulation. Treat it as a pulse, not a prediction.
+    </div></div>`;
+}
+
+function news(d){
+  $("#news").innerHTML = d.news.map(n => `<a class="item" href="${esc(n.url)}" target="_blank" rel="noopener">
+    <div class="meta"><span class="src">${esc(n.source)}</span><span>${ago(n.published)}</span></div>
+    <h3>${esc(n.title)}</h3></a>`).join("");
+}
+
+function pods(d){
+  $("#pods").innerHTML = d.podcasts.map(p => `<div class="item">
+    <div class="meta"><span class="src">${esc(p.show)}</span><span>${ago(p.published)}</span></div>
+    <h3>${esc(p.title)}</h3>
+    ${p.audio ? `<audio controls preload="none" src="${esc(p.audio)}"></audio>`
+              : `<p><a href="${esc(p.url)}" target="_blank" rel="noopener">Listen on BBC Sounds &rarr;</a></p>`}
+  </div>`).join("");
+}
+
+fetch("data.json").then(r => r.json()).then(d => {
+  $("#comp").textContent = d.competition + " " + d.season;
+  hero(d); fixtures(d); table(d); promo(d); news(d); pods(d);
+  $("#stamp").textContent = "Updated " + ago(d.updated);
+  tabs();
+}).catch(() => { $("#fixtures").innerHTML = "<div class='skel'>Couldn&rsquo;t load data. Try a refresh.</div>"; });
+</script>
+</body>
+</html>

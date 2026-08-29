@@ -1,0 +1,38 @@
+name: Update Wrexham data
+
+on:
+  schedule:
+    - cron: "13,43 * * * *"   # every 30 min at :13/:43 — odd minutes dodge GitHub's
+                              # congested :00/:30 slots where low-traffic crons get skipped
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: update-data
+  cancel-in-progress: false
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10  # v6 (SHA-pinned)
+      - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405  # v6 (SHA-pinned)
+        with:
+          python-version: "3.12"
+
+      - name: Self-check
+        run: python test_fetch.py
+
+      - name: Fetch data
+        run: python fetch_data.py
+
+      - name: Commit if changed
+        run: |
+          git config user.name  "wxm-bot"
+          git config user.email "actions@users.noreply.github.com"
+          git add data.json
+          git diff --staged --quiet || git commit -m "Update data $(date -u +%FT%TZ)"
+          git pull --rebase origin main
+          git push
