@@ -104,6 +104,7 @@ def fetch_matches():
                 "opponent": them["team"]["displayName"],
                 "logo": LOGO % them["team"]["id"],
                 "opponentAbbr": them["team"].get("abbreviation", ""),
+                "opponentShort": them["team"].get("shortDisplayName") or them["team"]["displayName"],
                 "home": us.get("homeAway") == "home",
                 "venue": comp.get("venue", {}).get("fullName", ""),
                 "completed": done,

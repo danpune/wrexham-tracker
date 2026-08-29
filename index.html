@@ -5,7 +5,8 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>Wrexham Tracker — Championship 2026/27</title>
 <meta name="description" content="Wrexham AFC fixtures, results, Championship table, promotion projection, news and podcasts. Updated hourly.">
-<meta name="theme-color" content="#0d0f12">
+<meta name="theme-color" content="#f2f4f6" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0d0f12" media="(prefers-color-scheme: dark)">
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src https: data:; media-src https:; frame-src https://www.youtube-nocookie.com; style-src 'unsafe-inline'; script-src 'unsafe-inline'; connect-src 'self'; manifest-src 'self'; base-uri 'none'; form-action 'none'">
 <meta property="og:title" content="Wrexham Tracker">
 <meta property="og:description" content="Fixtures, table, chances, squad, news and podcasts for Wrexham AFC. Updated every 30 minutes.">
@@ -23,10 +24,30 @@
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
 :root{
-  --bg:#0d0f12; --panel:#15181d; --panel2:#1b1f26; --line:#262b33;
-  --tx:#e9ecf1; --mut:#8b929e; --red:#e0242f; --red-dim:#7a1a20;
-  --w:#2ea043; --d:#8b929e; --l:#e0242f;
+  /* Light by default, the way ESPN and most club sites read. */
+  --bg:#f2f4f6; --panel:#fff; --panel2:#eaedf1; --line:#dde2e8;
+  --tx:#12161a; --mut:#5c6570; --red:#c8102e; --red-dim:#f0b8bf;
+  --w:#1a7f37; --d:#5c6570; --l:#c8102e;
+  --chip:rgba(0,0,0,.05);          /* backing behind crests */
+  --neutral:#b6bec7;               /* the "other team" half of a stat bar */
+  --navbg:rgba(242,244,246,.93);
+  --cup-bg:#fff6e0; --cup-tx:#8a6100; --cup-line:#efd79a;
+  --nextbg:linear-gradient(180deg,#fff2f3,var(--panel));
+  --shadow:0 1px 2px rgba(16,24,40,.06);
   --pad:16px;
+}
+@media (prefers-color-scheme: dark){
+  :root{
+    --bg:#0d0f12; --panel:#15181d; --panel2:#1b1f26; --line:#262b33;
+    --tx:#e9ecf1; --mut:#8b929e; --red:#e0242f; --red-dim:#7a1a20;
+    --w:#2ea043; --d:#8b929e; --l:#e0242f;
+    --chip:rgba(255,255,255,.09);
+    --neutral:#4a5058;
+    --navbg:rgba(13,15,18,.93);
+    --cup-bg:#241f10; --cup-tx:#ffd166; --cup-line:#4a3d1a;
+    --nextbg:linear-gradient(180deg,#1c1418,var(--panel));
+    --shadow:none;
+  }
 }
 html{-webkit-text-size-adjust:100%}
 body{
@@ -50,7 +71,7 @@ header{padding:22px 0 14px;border-bottom:1px solid var(--line)}
 .sbar i{display:block;height:100%;background:var(--red);border-radius:3px;width:0;transition:width .5s ease}
 .hero{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:16px 0}
 @media(max-width:520px){.hero{grid-template-columns:1fr}}
-.card{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:14px}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:14px;box-shadow:var(--shadow)}
 .card h2{font-size:11px;font-weight:700;letter-spacing:.7px;text-transform:uppercase;color:var(--mut);margin-bottom:9px}
 .score{font-size:30px;font-weight:800;letter-spacing:-1px;line-height:1.1}
 .opp{color:var(--mut);font-size:14px;margin-top:4px}
@@ -61,10 +82,10 @@ header{padding:22px 0 14px;border-bottom:1px solid var(--line)}
 .form{display:flex;gap:5px;margin-top:11px}
 .pill{width:23px;height:23px;border-radius:6px;display:grid;place-items:center;
   font-size:12px;font-weight:800;color:#fff}
-.pill.W{background:var(--w)} .pill.D{background:#3a4049} .pill.L{background:var(--l)}
+.pill.W{background:var(--w)} .pill.D{background:var(--neutral)} .pill.L{background:var(--l)}
 
 /* tabs */
-nav{position:sticky;top:0;z-index:9;background:rgba(13,15,18,.93);
+nav{position:sticky;top:0;z-index:9;background:var(--navbg);
   backdrop-filter:blur(10px);border-bottom:1px solid var(--line);margin-top:4px}
 .tabs{display:flex;gap:2px;overflow-x:auto;scrollbar-width:none;max-width:720px;margin:0 auto;padding:0 var(--pad)}
 .tabs::-webkit-scrollbar{display:none}
@@ -77,8 +98,8 @@ section[hidden]{display:none}
 
 /* fixtures */
 .mrow{display:flex;align-items:center;gap:11px;padding:11px 12px;border-radius:11px;
-  background:var(--panel);border:1px solid var(--line);margin-bottom:7px}
-.mrow.is-next{border-color:var(--red-dim);background:linear-gradient(180deg,#1c1418,var(--panel))}
+  background:var(--panel);border:1px solid var(--line);margin-bottom:7px;box-shadow:var(--shadow)}
+.mrow.is-next{border-color:var(--red);background:var(--nextbg)}
 .mdate{width:52px;flex:0 0 52px;font-size:11px;color:var(--mut);line-height:1.3;font-variant-numeric:tabular-nums}
 .mdate b{display:block;font-size:15px;color:var(--tx);font-weight:700}
 .mopp{flex:1;min-width:0;font-size:15px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
@@ -104,7 +125,9 @@ tr.line td{border-top:2px solid var(--red-dim)}
 .tkey{font-size:12px;color:var(--mut);margin-top:12px;line-height:1.7}
 .tkey b{color:var(--tx)}
 .hide-sm{}
+.nshort{display:none}
 @media(max-width:520px){.hide-sm{display:none}}
+@media(max-width:430px){.nfull{display:none}.nshort{display:inline}.mdate{width:44px;flex:0 0 44px}}
 
 /* promotion */
 .big{font-size:38px;font-weight:800;letter-spacing:-1.5px;line-height:1.1}
@@ -119,7 +142,7 @@ tr.line td{border-top:2px solid var(--red-dim)}
 
 /* news + podcasts */
 .item{display:block;background:var(--panel);border:1px solid var(--line);border-radius:11px;
-  padding:13px;margin-bottom:8px}
+  padding:13px;margin-bottom:8px;box-shadow:var(--shadow)}
 .item:active{background:var(--panel2)}
 .meta{display:flex;gap:8px;align-items:center;font-size:11px;color:var(--mut);margin-bottom:5px;flex-wrap:wrap}
 .src{color:var(--red);font-weight:700;text-transform:uppercase;letter-spacing:.4px}
@@ -133,13 +156,15 @@ footer img{vertical-align:middle;margin-top:5px;min-height:20px}
 footer .fb{color:var(--red);font-weight:600}
 /* many club crests are dark; a light chip keeps them visible on a dark ground */
 .crest{width:22px;height:22px;object-fit:contain;flex:0 0 22px;
-  background:rgba(255,255,255,.09);border-radius:5px;padding:2px}
+  background:var(--chip);border-radius:5px;padding:2px}
 .crest.lg{border-radius:9px;padding:4px}
 .crest.lg{width:34px;height:34px;flex:0 0 34px}
 .cbadge{font-size:9px;font-weight:800;letter-spacing:.5px;text-transform:uppercase;
-  color:#ffd166;border:1px solid #4a3d1a;background:#241f10;border-radius:4px;padding:2px 5px}
-.cal{font-size:15px;opacity:.55;padding:4px;text-decoration:none}
-.cal:hover{opacity:1}
+  color:var(--cup-tx);border:1px solid var(--cup-line);background:var(--cup-bg);border-radius:4px;padding:2px 5px}
+.cal{display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:700;
+  color:var(--red);border:1px solid var(--red-dim);background:var(--panel);
+  border-radius:999px;padding:4px 9px;text-decoration:none;white-space:nowrap}
+.cal:hover{background:var(--red);color:#fff;border-color:var(--red)}
 .mlocal{font-size:10px;color:var(--mut);display:block}
 /* match centre */
 .mc-head{display:flex;align-items:center;justify-content:center;gap:14px;padding:6px 0 14px}
@@ -159,7 +184,7 @@ footer .fb{color:var(--red);font-weight:600}
 .sb .lab i{font-style:normal;color:var(--mut)}
 .sb .tr{display:flex;height:7px;border-radius:4px;overflow:hidden;background:var(--panel2)}
 .sb .tr u{display:block;background:var(--red)}
-.sb .tr s{display:block;background:#3a4049}
+.sb .tr s{display:block;background:var(--neutral)}
 .xi{display:grid;grid-template-columns:1fr 1fr;gap:14px;font-size:12px;margin-top:6px}
 .xi ol{list-style:none;line-height:1.85}
 .xi h4{font-size:10px;text-transform:uppercase;letter-spacing:.5px;color:var(--mut);margin-bottom:5px}
@@ -265,7 +290,10 @@ function hero(d){  // d used for nextInfo below
       <div class="score" style="color:var(${cls})">${last.us}&ndash;${last.them}</div>
       <div class="opp"><img class="crest" src="${esc(last.logo)}" alt="" loading="lazy"> ${last.home ? "vs" : "at"} ${esc(last.opponent)}
         ${last.comp !== "League" ? `<span class="cbadge">${esc(last.comp)}</span>` : ""}</div>
-      <div class="form">${d.projection.form.map(f => `<span class="pill ${f}">${f}</span>`).join("")}</div>`;
+      <div class="form">${d.projection.form.map(f => `<span class="pill ${f}">${f}</span>`).join("")}</div>
+      ${d.lastMatch && d.lastMatch.stats.us ? `<div class="opp" style="margin-top:10px">
+        ${d.lastMatch.stats.us.possessionPct}% possession &middot; ${d.lastMatch.stats.us.totalShots} shots</div>` : ""}
+      <div><a class="olink" href="#" id="tocentre">Match centre &rarr;</a></div>`;
   }
   const next = d.matches.find(m => !m.completed);
   if (!next){ $("#next").innerHTML = "<h2>Next match</h2><div class='opp'>Season complete</div>"; return; }
@@ -308,10 +336,10 @@ function fixtures(d){
     html += `<div class="mrow${isNext ? " is-next" : ""}">
       <div class="mdate"><b>${ukDayNo(dt)}</b>${ukDay(dt)}</div>
       <img class="crest" src="${esc(m.logo)}" alt="" loading="lazy">
-      <div class="mopp">${esc(m.opponent)} <i>${m.home ? "(H)" : "(A)"}</i>
+      <div class="mopp"><span class="nfull">${esc(m.opponent)}</span><span class="nshort">${esc(m.opponentShort || m.opponent)}</span> <i>${m.home ? "(H)" : "(A)"}</i>
         ${m.comp !== "League" ? `<span class="cbadge">${esc(m.comp)}</span>` : ""}</div>
       ${right}
-      ${m.completed ? "" : `<a class="cal" href="ics/${esc(m.id)}.ics" title="Add to calendar" aria-label="Add ${esc(m.opponent)} to calendar">&#128197;</a>`}</div>`;
+      ${m.completed ? "" : `<a class="cal" href="ics/${esc(m.id)}.ics" aria-label="Add ${esc(m.opponent)} match to your calendar">+ Cal</a>`}</div>`;
   }
   $("#fixtures").innerHTML = html;
 }
@@ -413,7 +441,7 @@ function odds(d){
     const pc = v => (v*100).toFixed(0) + "%";
     return `<div class="card" style="margin-bottom:10px">
       <div class="meta"><span class="src">${ukFull(new Date(m.date))}</span><span>${m.home ? "vs" : "at"} ${esc(m.opponent)}</span></div>
-      <div class="obar">${seg(b.wrexham,"var(--red)")}${seg(b.draw,"#3a4049")}${seg(b.opponent,"#4a5058")}</div>
+      <div class="obar">${seg(b.wrexham,"var(--red)")}${seg(b.draw,"var(--neutral)")}${seg(b.opponent,"var(--mut)")}</div>
       <div class="okey">
         <span><b style="color:var(--red)">${pc(b.wrexham)}</b> Wrexham</span>
         <span><b>${pc(b.draw)}</b> Draw</span>
@@ -549,6 +577,8 @@ fetch("data.json").then(r => r.json()).then(d => {
   $("#sbarfill").style.width = (done / total * 100) + "%";
   hero(d); fixtures(d); table(d); centre(d); promo(d); squad(d); news(d); pods(d);
   info(d);
+  const tc = $("#tocentre");
+  if (tc) tc.onclick = e => { e.preventDefault(); document.querySelectorAll(".tab")[2].click(); };
   const sb = $("#sharebtn"); if (sb) sb.onclick = () => shareResult(d);
   $("#stamp").textContent = "Updated " + ago(d.updated);
   tabs();
