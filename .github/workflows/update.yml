@@ -5,6 +5,8 @@ on:
     - cron: "13,43 * * * *"   # every 30 min at :13/:43 — odd minutes dodge GitHub's
                               # congested :00/:30 slots where low-traffic crons get skipped
   workflow_dispatch:
+  repository_dispatch:          # external kick, in case the schedule above never fires
+    types: [refresh]
 
 permissions:
   contents: write

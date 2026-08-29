@@ -19,6 +19,7 @@ dependencies, no external fonts.
 | Podcasts | Public podcast RSS (#AskWXM, Me the Wife and Wrexham AFC, Rousey's, BBC Sounds) | free |
 | Odds | Polymarket per-fixture 3-way markets | free |
 | Visitors | hits.sh badge | free, no signup |
+| Weather | Open-Meteo (geocode + forecast) | free |
 
 ## Notes
 
@@ -37,6 +38,21 @@ dependencies, no external fonts.
 - Feed URLs are filtered to http(s) at fetch time. HTML-escaping does not neutralise a
   `javascript:` scheme, and news/podcast links are third-party.
 - No preload hint on `data.json`: `as="fetch"` mode-mismatches `fetch()` and doubles the download.
+
+## Refresh trigger
+
+The repo's own `schedule` has never fired (GitHub does not always start crons on a
+brand-new repo). Until it does, `update.yml` also accepts a `repository_dispatch` of
+type `refresh`, and the tennis tracker's proven 30-minute cron pings it. That needs a
+fine-grained PAT with **Contents: read and write** on this repo, stored as the
+`WXM_DISPATCH` secret in `danpune/tennis-slams-tracker`. With no secret set the ping
+step skips and neither project is affected.
+
+Kick a refresh by hand any time:
+
+```
+gh workflow run "Update Wrexham data" --repo danpune/wrexham-tracker
+```
 
 ## Develop
 
