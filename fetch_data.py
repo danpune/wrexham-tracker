@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Build data.json for the Wrexham tracker from free public feeds (no API keys)."""
 
-import json, re, time, urllib.request, xml.etree.ElementTree as ET
+import json, re, time, urllib.parse, urllib.request, xml.etree.ElementTree as ET
 from datetime import datetime, timezone
 from email.utils import parsedate_to_datetime
 from html import unescape
@@ -145,16 +145,24 @@ def fetch_news(limit=40):
             title, source = title.rsplit(" - ", 1)
         items.append({
             "title": title.strip(),
-            "url": it.findtext("link") or "",
+            "url": safe_url(it.findtext("link")),
             "source": source.strip() or (it.findtext("source") or "").strip(),
             "published": rfc822(it.findtext("pubDate") or ""),
         })
-    items = [i for i in items if i["published"]]
+    items = [i for i in items if i["published"] and i["url"]]
     items.sort(key=lambda i: i["published"], reverse=True)
     return items[:limit]
 
 
 # --- podcasts -----------------------------------------------------------------
+def safe_url(u):
+    """Only http(s) survives. Feed items are third-party: a javascript: or data:
+    URL here would land in an href or a media src, and HTML-escaping does not
+    neutralise a scheme. Rejecting at the source covers every consumer."""
+    u = (u or "").strip()
+    return u if u[:7].lower() == "http://" or u[:8].lower() == "https://" else ""
+
+
 def strip_html(s):
     return re.sub(r"\s+", " ", re.sub(r"<[^>]+>", " ", unescape(s or ""))).strip()
 
@@ -179,12 +187,58 @@ def fetch_podcasts(limit=20):
                 "show": show,
                 "title": title[:160],
                 "summary": summary[:220],
-                "audio": enc.get("url") if enc is not None else None,
-                "url": it.findtext("link") or "",
+                "audio": safe_url(enc.get("url")) if enc is not None else None,
+                "url": safe_url(it.findtext("link")),
                 "published": published,
             })
     episodes.sort(key=lambda e: e["published"], reverse=True)
     return episodes[:limit]
+
+
+# --- prediction market odds -------------------------------------------------
+# Polymarket lists a 3-way market per Championship fixture, slugged
+# elc-<home>-<away>-YYYY-MM-DD. Kalshi lists the same fixtures
+# (KXEFLCHAMPIONSHIPGAME) but every one is quoteless -- no bid, ask, last price
+# or open interest -- so there is nothing to show from it yet.
+def fetch_odds(matches, lookahead=5):
+    """Polymarket lists a 3-way market per fixture, slugged elc-<h>-<a>-YYYY-MM-DD.
+    A generic "Wrexham" search only ranks up resolved past events, so query per
+    fixture and match on the date in the slug.
+
+    Kalshi lists the same fixtures (KXEFLCHAMPIONSHIPGAME) but every contract is
+    quoteless -- no bid, ask, last price or open interest -- so there is nothing
+    to read from it. Add it here if that changes.
+    """
+    odds = {}
+    upcoming = [m for m in matches if not m["completed"]][:lookahead]
+    for m in upcoming:
+        day = m["date"][:10]
+        term = urllib.parse.quote(m["opponent"].split()[0] + " Wrexham")
+        try:
+            data = get(f"https://gamma-api.polymarket.com/public-search"
+                       f"?q={term}&limit_per_type=10", as_json=True)
+        except Exception:
+            continue
+        for ev in data.get("events", []):
+            if not (ev.get("slug") or "").endswith(day) or ev.get("closed"):
+                continue
+            book = {}
+            for mk in ev.get("markets", []):
+                try:
+                    price = float(json.loads(mk.get("outcomePrices") or "[]")[0])
+                except (ValueError, IndexError, TypeError):
+                    continue
+                if float(mk.get("liquidity") or 0) <= 0:
+                    continue      # listed but untraded: a 0/1 placeholder, not a price
+                name = (mk.get("groupItemTitle") or mk.get("question") or "").lower()
+                key = "draw" if "draw" in name else "wrexham" if "wrexham" in name else "opponent"
+                book[key] = price
+            if len(book) == 3:
+                odds[day] = {"book": {k: round(v, 3) for k, v in book.items()},
+                             "url": "https://polymarket.com/event/" + ev["slug"]}
+            break
+        time.sleep(1)             # be polite: this runs every 30 minutes
+    return odds
 
 
 # --- promotion projection -----------------------------------------------------
@@ -225,11 +279,12 @@ def main():
         "news": fetch_news(),
         "podcasts": fetch_podcasts(),
         "projection": project(table, matches),
+        "odds": fetch_odds(matches),
     }
     with open("data.json", "w") as f:
         json.dump(data, f, separators=(",", ":"))
     print(f"matches={len(matches)} table={len(table)} news={len(data['news'])} "
-          f"pods={len(data['podcasts'])}")
+          f"pods={len(data['podcasts'])} odds={len(data['odds'])}")
 
 
 if __name__ == "__main__":
