@@ -68,9 +68,8 @@ ALIASES = {
     "west bromwich albion": "west brom",
     "wolverhampton wanderers": "wolves",
     "preston north end": "preston",
-    "sheffield united": "sheff",
+    "sheffield united": "sheff utd",
     "sheffield wednesday": "sheff wed",
-    "nottingham forest": "forest",
     "brighton & hove albion": "brighton",
 }
 
@@ -95,6 +94,10 @@ def key_words(opponent):
     drop = {"city", "town", "united", "athletic", "rovers", "wanderers", "county",
             "albion", "forest", "fc", "afc"}
     words = [w.lower() for w in re.sub(r"[^\w\s]", " ", opponent).split()]
+    # Sheffield United and Sheffield Wednesday differ only in a word `drop`
+    # removes, which would make either match the other's highlights.
+    if words and words[0] == "sheffield":
+        return set(words)
     keep = [w for w in words if w not in drop and len(w) >= 5]
     return set(keep or [w for w in words if w not in drop] or words)
 
