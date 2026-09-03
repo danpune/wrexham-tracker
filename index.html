@@ -7,7 +7,7 @@
 <meta name="description" content="Wrexham AFC fixtures, results, Championship table, promotion projection, news and podcasts. Updated hourly.">
 <meta name="theme-color" content="#f2f4f6" media="(prefers-color-scheme: light)">
 <meta name="theme-color" content="#0d0f12" media="(prefers-color-scheme: dark)">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src https: data:; media-src https:; frame-src https://www.youtube-nocookie.com; style-src 'unsafe-inline'; script-src 'unsafe-inline'; connect-src 'self'; manifest-src 'self'; base-uri 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src 'self' https: data:; media-src https:; frame-src https://www.youtube-nocookie.com; style-src 'unsafe-inline'; script-src 'unsafe-inline'; connect-src 'self'; manifest-src 'self'; base-uri 'none'; form-action 'none'">
 <meta property="og:title" content="Wrexham Tracker">
 <meta property="og:description" content="Fixtures, table, chances, squad, news and podcasts for Wrexham AFC. Updated every 30 minutes.">
 <meta property="og:type" content="website">
@@ -62,29 +62,39 @@ body{
 a{color:inherit;text-decoration:none}
 
 /* header */
-header{padding:22px 0 14px;border-bottom:1px solid var(--line)}
+header{border-bottom:1px solid var(--line)}
+.band{background:linear-gradient(160deg,#e01e2d 0%,#b30d24 55%,#8d0a1e 100%);
+  color:#fff;padding:20px 0 16px}
 .mark{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap}
-.mark h1{font-size:22px;font-weight:800;letter-spacing:-.4px}
-.mark h1 span{color:var(--red)}
-.badge{font-size:11px;font-weight:700;letter-spacing:.6px;text-transform:uppercase;
-  color:var(--mut);border:1px solid var(--line);border-radius:999px;padding:3px 9px}
+.mark h1{font-size:30px;font-weight:800;letter-spacing:-1px;line-height:1}
+.mark h1 span{color:#ffd166}
+.story{font-size:12.5px;line-height:1.45;color:rgba(255,255,255,.86);margin-top:8px;max-width:34em}
+.badge{font-size:10.5px;font-weight:800;letter-spacing:.6px;text-transform:uppercase;
+  color:#fff;border:1px solid rgba(255,255,255,.45);border-radius:999px;padding:3px 9px}
+.progline{display:flex;justify-content:space-between;gap:10px;margin-top:7px;
+  font-size:10.5px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;
+  color:rgba(255,255,255,.82)}
 
 /* hero: the two things a fan actually opened this for */
-.sbar{height:4px;background:var(--panel2);border-radius:3px;margin-top:11px;overflow:hidden}
-.sbar i{display:block;height:100%;background:var(--red);border-radius:3px;width:0;transition:width .5s ease}
-.hero{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:16px 0}
+.sbar{height:5px;background:rgba(0,0,0,.28);border-radius:3px;margin-top:14px;overflow:hidden}
+.sbar i{display:block;height:100%;background:#ffd166;border-radius:3px;width:0;transition:width .6s ease}
+.hero{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:14px 0 16px}
 @media(max-width:520px){.hero{grid-template-columns:1fr}}
 .card{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:14px;box-shadow:var(--shadow)}
 .card h2{font-size:11px;font-weight:700;letter-spacing:.7px;text-transform:uppercase;color:var(--mut);margin-bottom:9px}
-.score{font-size:30px;font-weight:800;letter-spacing:-1px;line-height:1.1}
+.score{font-size:46px;font-weight:800;letter-spacing:-2.5px;line-height:1}
+.sline{display:flex;align-items:center;gap:12px;margin:2px 0 4px}
+.sline .crest{width:40px;height:40px;flex:0 0 40px;border-radius:9px;padding:3px}
+.vs{font-size:11px;font-weight:800;letter-spacing:.6px;text-transform:uppercase;color:var(--mut)}
 .opp{color:var(--mut);font-size:14px;margin-top:4px}
-.count{font-size:26px;font-weight:800;letter-spacing:-.5px;font-variant-numeric:tabular-nums}
+.count{font-size:34px;font-weight:800;letter-spacing:-1.2px;font-variant-numeric:tabular-nums;
+  color:var(--red);line-height:1.05}
 .next-when{color:var(--red);font-size:13px;font-weight:600;margin-top:5px}
 
 /* form pills */
-.form{display:flex;gap:5px;margin-top:11px}
-.pill{width:23px;height:23px;border-radius:6px;display:grid;place-items:center;
-  font-size:12px;font-weight:800;color:#fff}
+.form{display:flex;gap:5px;margin-top:12px}
+.pill{width:27px;height:27px;border-radius:7px;display:grid;place-items:center;
+  font-size:13px;font-weight:800;color:#fff}
 .pill.W{background:var(--pill-w)} .pill.D{background:var(--pill-d)} .pill.L{background:var(--pill-l)}
 
 /* tabs */
@@ -106,7 +116,9 @@ section[hidden]{display:none}
 .mrow.is-next{border-color:var(--red);background:var(--nextbg)}
 .mdate{width:52px;flex:0 0 52px;font-size:11px;color:var(--mut);line-height:1.3;font-variant-numeric:tabular-nums}
 .mdate b{display:block;font-size:15px;color:var(--tx);font-weight:700}
-.mopp{flex:1;min-width:0;font-size:15px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.mopp{flex:1;min-width:0;font-size:15px;font-weight:600;display:flex;align-items:baseline;gap:5px}
+.mopp .nm{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.mopp i,.mopp .cbadge{flex:0 0 auto}
 .mopp i{font-style:normal;color:var(--mut);font-weight:600;font-size:12px}
 .mres{font-size:15px;font-weight:800;font-variant-numeric:tabular-nums}
 .mtag{font-size:10px;font-weight:800;letter-spacing:.5px;color:var(--red);text-transform:uppercase}
@@ -137,7 +149,7 @@ tr.line td{border-top:2px solid var(--red-dim)}
 .big{font-size:38px;font-weight:800;letter-spacing:-1.5px;line-height:1.1}
 .bar{height:9px;background:var(--panel2);border-radius:6px;overflow:hidden;margin:13px 0 7px;position:relative}
 .bar i{display:block;height:100%;background:var(--red);border-radius:6px}
-.bar u{position:absolute;top:-3px;bottom:-3px;width:2px;background:var(--tx);opacity:.65}
+.bar u{position:absolute;top:0;bottom:0;width:2px;background:var(--tx);opacity:.65}
 .stats{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:14px}
 .stat{background:var(--panel2);border-radius:10px;padding:11px}
 .stat b{display:block;font-size:19px;font-weight:800;font-variant-numeric:tabular-nums}
@@ -204,13 +216,15 @@ footer img{vertical-align:middle;margin-top:5px;min-height:20px}
 </head>
 <body>
 
-<header><div class="wrap">
+<header><div class="band"><div class="wrap">
   <div class="mark">
-    <h1>WREXHAM<span>.</span>TRACKER</h1>
+    <h1>WRECSAM<span>.</span></h1>
     <span class="badge" id="comp">Championship 2026/27</span>
-    <span class="badge" id="prog"></span>
   </div>
+  <p class="story">Second season in the Championship &middot; chasing a fourth promotion in five years</p>
   <div class="sbar" aria-hidden="true"><i id="sbarfill"></i></div>
+  <div class="progline"><span id="prog"></span><span id="streak"></span></div>
+</div></div><div class="wrap">
   <div class="hero">
     <div class="card" id="last"><h2>Last result</h2><div class="skel" style="padding:8px 0">—</div></div>
     <div class="card" id="next"><h2>Next match</h2><div class="skel" style="padding:8px 0">—</div></div>
@@ -293,13 +307,19 @@ function hero(d){  // d used for nextInfo below
   const last = played[played.length - 1];
   if (last){
     const cls = last.result === "W" ? "--w" : last.result === "L" ? "--l" : "--d";
+    const wxLogo = (d.table.find(r => r.isWrexham) || {}).logo || "";
     $("#last").innerHTML = `<h2>Last result</h2>
-      <div class="score" style="color:var(${cls})">${last.us}&ndash;${last.them}</div>
-      <div class="opp"><img class="crest" src="${esc(last.logo)}" alt="" loading="lazy"> ${last.home ? "vs" : "at"} ${esc(last.opponent)}
+      <div class="sline">
+        <img class="crest" src="${esc(wxLogo)}" alt="" loading="lazy">
+        <div class="score" style="color:var(${cls})">${last.us}&ndash;${last.them}</div>
+        <img class="crest" src="${esc(last.logo)}" alt="" loading="lazy">
+      </div>
+      <div class="opp"><span class="vs">${last.home ? "vs" : "away at"}</span> ${esc(last.opponent)}
+        ${last.home ? " &middot; Y Cae Ras" : ""}
         ${last.comp !== "League" ? `<span class="cbadge">${esc(last.comp)}</span>` : ""}</div>
-      <div class="form">${d.projection.form.map(f => `<span class="pill ${f}">${f}</span>`).join("")}</div>
+      <div class="form">${(d.projection?.form || []).map(f => `<span class="pill ${f}">${f}</span>`).join("")}</div>
       ${d.lastMatch && d.lastMatch.stats.us ? `<div class="opp" style="margin-top:10px">
-        ${d.lastMatch.stats.us.possessionPct}% possession &middot; ${d.lastMatch.stats.us.totalShots} shots</div>` : ""}
+        ${esc(String(d.lastMatch.stats.us.possessionPct))}% possession &middot; ${esc(String(d.lastMatch.stats.us.totalShots))} shots</div>` : ""}
       <div><a class="olink" href="#" id="tocentre">Match centre &rarr;</a></div>`;
   }
   const next = nextMatch(d);
@@ -346,7 +366,7 @@ function fixtures(d){
     html += `<div class="mrow${isNext ? " is-next" : ""}">
       <div class="mdate"><b>${ukDayNo(dt)}</b>${ukDay(dt)}</div>
       <img class="crest" src="${esc(m.logo)}" alt="" loading="lazy">
-      <div class="mopp"><span class="nfull">${esc(m.opponent)}</span><span class="nshort">${esc(m.opponentShort || m.opponent)}</span> <i>${m.home ? "(H)" : "(A)"}</i>
+      <div class="mopp"><span class="nm"><span class="nfull">${esc(m.opponent)}</span><span class="nshort">${esc(m.opponentShort || m.opponent)}</span></span><i>${m.home ? "(H)" : "(A)"}</i>
         ${m.comp !== "League" ? `<span class="cbadge">${esc(m.comp)}</span>` : ""}</div>
       ${right}
       ${m.completed
@@ -380,7 +400,7 @@ function promo(d){
     : `<div class="big">${p.projected} pts</div>
        <div class="note" style="margin-top:6px">projected final total &middot; playoff cut is around ${p.cutoff}</div>`;
   $("#promo").innerHTML = `<div class="card">${headline}
-    <div class="bar"><i style="width:${pct}%"></i><u style="left:100%"></u></div>
+    <div class="bar"><i style="width:${pct}%"></i><u style="left:calc(100% - 2px)"></u></div>
     <div class="note" style="margin-top:0">${p.points} pts banked of the ~${p.cutoff} that usually reaches the playoffs.</div>
     <div class="stats">
       <div class="stat"><b>${p.rank}${["th","st","nd","rd"][p.rank % 10 < 4 && Math.floor(p.rank/10) !== 1 ? p.rank % 10 : 0]}</b><span>Position</span></div>
@@ -388,7 +408,7 @@ function promo(d){
       <div class="stat"><b>${p.neededPpg}</b><span>Needed / game</span></div>
     </div>
     <div class="note">
-      ${p.gapToSixth > 0 ? `<b style="color:var(--tx)">${p.gapToSixth} pts</b> behind 6th with ${p.remaining} to play.`
+      ${p.rank > 6 ? `<b style="color:var(--tx)">${p.gapToSixth > 0 ? p.gapToSixth + " pts" : "Level on points"}</b> ${p.gapToSixth > 0 ? "behind 6th" : "with 6th, behind on goal difference"} with ${p.remaining} to play.`
                          : `<b style="color:var(--tx)">Inside the playoff places</b> with ${p.remaining} to play.`}<br>
       Last season Wrexham finished 7th &mdash; two points short of the playoffs.<br>
       This is a straight-line projection from current form, not a simulation. Treat it as a pulse, not a prediction.
@@ -405,7 +425,7 @@ function centre(d){
 
   const bar = (label, a, b) => {
     const t = n(a) + n(b) || 1;
-    return `<div class="sb"><div class="lab"><b>${a ?? 0}</b><i>${label}</i><b>${b ?? 0}</b></div>
+    return `<div class="sb"><div class="lab"><b>${esc(String(a ?? 0))}</b><i>${label}</i><b>${esc(String(b ?? 0))}</b></div>
       <div class="tr"><u style="width:${n(a)/t*100}%"></u><s style="width:${n(b)/t*100}%"></s></div></div>`;
   };
 
@@ -523,9 +543,9 @@ function squad(d){
   let html = "", seen = "";
   for (const p of d.squad){
     if (p.pos !== seen){ html += `<div class="mnth">${POS[p.pos] || "Squad"}</div>`; seen = p.pos; }
-    html += `<div class="mrow"><div class="mdate" style="width:30px;flex:0 0 30px"><b>${esc(String(p.no))}</b></div>
+    html += `<div class="mrow"><div class="mdate" style="width:30px;flex:0 0 30px"><b>${esc(String(p.no)) || "&ndash;"}</b></div>
       <div class="mopp">${esc(p.name)}</div>
-      ${p.age ? `<div class="mres" style="font-size:12px;color:var(--mut)">${p.age}</div>` : ""}</div>`;
+      ${p.age ? `<div class="mres" style="font-size:12px;color:var(--mut)">${esc(String(p.age))}</div>` : ""}</div>`;
   }
   $("#squad").innerHTML = html || "<div class='skel'>Squad unavailable.</div>";
 }
@@ -589,6 +609,17 @@ fetch("data.json").then(r => r.json()).then(d => {
   const lg = d.matches.filter(m => m.comp === "League");   // cups don't belong in league progress
   const done = lg.filter(m => m.completed).length, total = lg.length;
   $("#prog").textContent = `${done} played \u00b7 ${total - done} to go`;
+  const f = d.projection?.form || [];
+  let streak = "";
+  if (f.length){
+    const last = f[f.length - 1];
+    let n = 0; while (n < f.length && f[f.length - 1 - n] === last) n++;
+    const unbeaten = f.slice().reverse().findIndex(x => x === "L");
+    streak = last === "W" ? (n > 1 ? `${n} wins in a row` : "Won last time out")
+           : last === "L" ? (f.filter(x => x === "W").length ? "Bounce-back time" : "Still chasing a first win")
+           : unbeaten === -1 ? `Unbeaten in ${f.length}` : `Unbeaten in ${unbeaten}`;
+  }
+  $("#streak").textContent = streak;
   $("#sbarfill").style.width = (done / total * 100) + "%";
   // One failing panel must not blank the other seven.
   for (const [name, fn] of [["hero",hero],["fixtures",fixtures],["table",table],["centre",centre],
