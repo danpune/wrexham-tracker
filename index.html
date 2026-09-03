@@ -111,8 +111,16 @@ header{border-bottom:1px solid var(--line)}
 .sline .crest{width:40px;height:40px;flex:0 0 40px;border-radius:9px;padding:3px}
 .vs{font-size:11px;font-weight:800;letter-spacing:.6px;text-transform:uppercase;color:var(--mut)}
 .opp{color:var(--mut);font-size:14px;margin-top:4px}
-.count{font-size:34px;font-weight:800;letter-spacing:-1.2px;font-variant-numeric:tabular-nums;
-  color:var(--red);line-height:1.05}
+.count{display:flex;align-items:baseline;gap:14px;color:var(--red);line-height:1}
+.count b{font-size:38px;font-weight:800;letter-spacing:-1.5px;font-variant-numeric:tabular-nums}
+.count i{font-style:normal;font-size:11px;font-weight:700;letter-spacing:.8px;
+  text-transform:uppercase;color:var(--mut);margin-left:3px}
+.count.soon b{font-size:44px}
+.count.live b{color:var(--w)}
+.cdtag{display:inline-block;font-size:10px;font-weight:800;letter-spacing:.7px;
+  text-transform:uppercase;color:#fff;background:var(--red);border-radius:999px;
+  padding:3px 9px;vertical-align:3px;margin-left:2px}
+.cdtag.tmr{background:var(--mut)}
 .next-when{color:var(--red);font-size:13px;font-weight:600;margin-top:5px}
 
 /* form pills */
@@ -372,23 +380,46 @@ function hero(d){  // d used for nextInfo below
     <div class="count" id="cd">&nbsp;</div>
     <div class="opp"><img class="crest" src="${esc(next.logo)}" alt="" loading="lazy"> ${next.home ? "vs" : "at"} <b>${esc(next.opponent)}</b>
       ${next.comp !== "League" ? `<span class="cbadge">${esc(next.comp)}</span>` : ""}</div>
-    <div class="next-when">${when}${differs ? ` &middot; ${mine} your time` : ""}</div>
+    <div class="next-when">${when}${differs ? ` &middot; ${mine} your time` : ""}
+      ${(() => { const k = x => x.toLocaleDateString("en-CA", UK), now = new Date(),
+                 tmr = new Date(now.getTime() + 864e5);
+                 return k(dt) === k(now) ? `<span class="cdtag">Today</span>`
+                      : k(dt) === k(tmr) ? `<span class="cdtag tmr">Tomorrow</span>` : ""; })()}</div>
     ${d.nextInfo && d.nextInfo.weather ? `<div class="opp" style="margin-top:6px">${d.nextInfo.weather.icon} ${d.nextInfo.weather.temp}&deg;C ${esc(d.nextInfo.weather.label)}${d.nextInfo.venue ? " &middot; " + esc(d.nextInfo.venue) : ""}</div>` : ""}
     ${d.nextInfo && d.nextInfo.tv.length ? `<div class="opp">&#128250; ${d.nextInfo.tv.map(esc).join(", ")}</div>` : ""}
     ${d.nextInfo && d.nextInfo.h2h ? `<div class="opp" style="font-size:12px">${esc(d.nextInfo.h2h)}</div>` : ""}
     <div>${next.awaitingResult ? "" : `<a class="olink" href="ics/${esc(next.id)}.ics">&#128197; Add to calendar</a>`}
       <a class="olink" style="margin-left:22px" href="ics/wrexham.ics">Subscribe to all fixtures</a></div>`;
-  let iv;
+  let iv, settled = false;
+  // Precision follows how close it is: minutes are noise two days out, and the
+  // card should feel different on match day than it does midweek.
+  const seg = (n, unit) => `<span><b>${n}</b><i>${unit}</i></span>`;
+  const ukDayKey = x => x.toLocaleDateString("en-CA", UK);
   const tick = () => {
-    if (next.awaitingResult){ $("#cd").textContent = "Full time"; return clearInterval(iv); }
-    let s = (dt - Date.now()) / 1000;
-    if (s <= 0){ $("#cd").textContent = "Kick-off"; return clearInterval(iv); }
-    const dd = Math.floor(s/86400), hh = Math.floor(s%86400/3600), mm = Math.floor(s%3600/60);
-    $("#cd").textContent = dd ? `${dd}d ${hh}h ${mm}m` : `${hh}h ${mm}m ${Math.floor(s%60)}s`;
+    const el = $("#cd");
+    if (next.awaitingResult){ el.className = "count"; el.innerHTML = seg("FT", "full time"); settled = true; return clearInterval(iv); }
+    const s = (dt - Date.now()) / 1000;
+    if (s <= 0){
+      el.className = "count live";
+      el.innerHTML = `<span><b>LIVE</b><i>kicked off</i></span>`;
+      settled = true; return clearInterval(iv);
+    }
+    const dd = Math.floor(s/86400), hh = Math.floor(s%86400/3600),
+          mm = Math.floor(s%3600/60), ss = Math.floor(s%60);
+    el.className = "count" + (s < 3600 ? " soon" : "");
+    const u = (n, one, many) => n === 1 ? one : many;
+    el.innerHTML = dd >= 1 ? seg(dd, u(dd, "day", "days")) + seg(hh, u(hh, "hr", "hrs"))
+                 : s >= 3600 ? seg(hh, u(hh, "hr", "hrs")) + seg(mm, u(mm, "min", "mins"))
+                 : seg(mm, u(mm, "min", "mins")) + seg(ss, u(ss, "sec", "secs"));
   };
   tick();
   // Only tick per-second once the seconds are actually on screen.
-  iv = setInterval(tick, (dt - Date.now()) > 36e5 ? 30000 : 1000);
+  // On the first tick `iv` is still undefined, so clearInterval() inside tick
+  // cannot stop a timer that has not started yet — starting one anyway left a
+  // 1s timer running forever from kick-off onward.
+  const away = dt - Date.now();
+  if (!settled)
+    iv = window.__cdiv = setInterval(tick, away > 864e5 ? 60000 : away > 36e5 ? 30000 : 1000);
 }
 
 function fixtures(d){
