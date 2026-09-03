@@ -430,7 +430,9 @@ def fetch_squad():
                     "pos": (it.get("position") or {}).get("abbreviation", ""),
                     "age": it.get("age")})
     order = {"G": 0, "D": 1, "M": 2, "F": 3}
-    out.sort(key=lambda p: (order.get(p["pos"], 4), p["name"]))
+    out.sort(key=lambda p: (order.get(p["pos"], 4),
+                            int(p["no"]) if str(p["no"]).isdigit() else 999,
+                            p["name"]))
     return out
 
 

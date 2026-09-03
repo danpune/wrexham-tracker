@@ -4,11 +4,11 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>Wrexham Tracker — Championship 2026/27</title>
-<meta name="description" content="Wrexham AFC fixtures, results, Championship table, promotion projection, news and podcasts. Updated hourly.">
+<meta name="description" content="Wrexham AFC fixtures, results, Championship table, promotion projection, news and podcasts.">
 <meta name="theme-color" content="#e01e2d">
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src 'self' https: data:; media-src https:; frame-src https://www.youtube-nocookie.com; style-src 'unsafe-inline'; script-src 'unsafe-inline'; connect-src 'self'; manifest-src 'self'; base-uri 'none'; form-action 'none'">
 <meta property="og:title" content="Wrexham Tracker">
-<meta property="og:description" content="Fixtures, table, chances, squad, news and podcasts for Wrexham AFC. Updated every 30 minutes.">
+<meta property="og:description" content="Fixtures, table, chances, squad, news and podcasts for Wrexham AFC.">
 <meta property="og:type" content="website">
 <meta property="og:url" content="https://danpune.github.io/wrexham-tracker/">
 <meta property="og:image" content="https://danpune.github.io/wrexham-tracker/preview.jpg">
@@ -57,7 +57,7 @@ body{
   font:16px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
   padding-bottom:env(safe-area-inset-bottom);
 }
-.wrap{max-width:720px;margin:0 auto;padding:0 var(--pad)}
+.wrap,.tabs{max-width:720px;margin:0 auto;padding:0 var(--pad)}
 
 /* Desktop was a phone layout stretched across the screen: a 720px column in a
    1680px window wasted 57% of the width and made the page 4000px tall. */
@@ -76,6 +76,10 @@ body{
   #fixtures .mnth,#squad .mnth{grid-column:1 / -1}
   #news .item,#pods .item,#fixtures .mrow,#squad .mrow{margin-bottom:9px}
   .hero{grid-template-columns:1fr 1fr;gap:14px}
+  /* a league table is a reading unit, not a full-bleed one */
+  #table table{max-width:660px}
+  .tkey{max-width:660px}
+  .story{max-width:46em}
 }
 @media(min-width:1400px){ .wrap,.tabs{max-width:1240px} }
 a{color:inherit;text-decoration:none}
@@ -88,6 +92,7 @@ header{border-bottom:1px solid var(--line)}
 .mark h1{font-size:30px;font-weight:800;letter-spacing:-1px;line-height:1}
 .mark h1 span{color:#ffd166}
 .story{font-size:12.5px;line-height:1.45;color:rgba(255,255,255,.86);margin-top:8px;max-width:34em}
+.bandgrid .right{flex:0 1 360px}
 .badge{font-size:10.5px;font-weight:800;letter-spacing:.6px;text-transform:uppercase;
   color:#fff;border:1px solid rgba(255,255,255,.45);border-radius:999px;padding:3px 9px}
 .progline{display:flex;justify-content:space-between;gap:10px;margin-top:7px;
@@ -119,7 +124,7 @@ header{border-bottom:1px solid var(--line)}
 /* tabs */
 nav{position:sticky;top:0;z-index:9;background:var(--navbg);
   backdrop-filter:blur(10px);border-bottom:1px solid var(--line);margin-top:4px}
-.tabs{display:flex;gap:2px;overflow-x:auto;scrollbar-width:none;max-width:720px;margin:0 auto;padding:0 var(--pad)}
+.tabs{display:flex;gap:2px;overflow-x:auto;scrollbar-width:none;margin:0 auto;padding:0 var(--pad)}
 .tabs::-webkit-scrollbar{display:none}
 @media(max-width:430px){.tabs{mask-image:linear-gradient(90deg,#000 88%,transparent)}}
 .tab{flex:0 0 auto;padding:13px 10px;font-size:13.5px;font-weight:600;color:var(--mut);
@@ -199,8 +204,11 @@ footer img{vertical-align:middle;margin-top:5px;min-height:20px}
   color:var(--red);border:1px solid var(--red-dim);background:var(--panel);
   border-radius:999px;padding:4px 9px;text-decoration:none;white-space:nowrap}
 .cal:hover{background:var(--red);color:#fff;border-color:var(--red)}
-.cal.hl{font-size:13px;padding:3px 8px}
+.cal.hl{font-size:13px;padding:6px 10px;min-height:34px}
 .mlocal{font-size:10px;color:var(--mut);display:block}
+.mtime{flex:0 0 auto;text-align:right;font-size:11px;color:var(--mut);line-height:1.3;
+  font-variant-numeric:tabular-nums;white-space:nowrap}
+@media(max-width:360px){.mlocal{display:none}.mrow{gap:8px}}
 /* match centre */
 .mc-head{display:flex;align-items:center;justify-content:center;gap:14px;padding:6px 0 14px}
 .mc-side{display:flex;flex-direction:column;align-items:center;gap:6px;width:88px;text-align:center}
@@ -225,11 +233,14 @@ footer img{vertical-align:middle;margin-top:5px;min-height:20px}
 .xi h4{font-size:10px;text-transform:uppercase;letter-spacing:.5px;color:var(--mut);margin-bottom:5px}
 .xi i{font-style:normal;color:var(--mut);font-size:10px;margin-right:5px}
 .yt{width:100%;aspect-ratio:16/9;border:0;border-radius:10px;margin-top:10px}
+.ytph{background:var(--panel2);display:grid;place-items:center}
+.ytph::after{content:"\25b6 Highlights";color:var(--mut);font-size:13px;font-weight:600}
 .obar{display:flex;height:11px;border-radius:6px;overflow:hidden;margin:10px 0 9px;gap:2px}
 .obar i{display:block}
 .okey{display:flex;justify-content:space-between;font-size:12px;color:var(--mut);gap:8px}
 .okey b{display:block;font-size:16px;color:var(--tx);font-variant-numeric:tabular-nums}
-.olink{display:inline-block;margin-top:11px;font-size:12px;color:var(--red);font-weight:600}
+.olink{display:inline-block;margin-top:11px;font-size:12px;color:var(--red);font-weight:600;
+  padding:6px 0;min-height:24px}
 .skel{color:var(--mut);padding:26px 0;text-align:center;font-size:14px}
 </style>
 </head>
@@ -238,7 +249,7 @@ footer img{vertical-align:middle;margin-top:5px;min-height:20px}
 <header><div class="band"><div class="wrap bandgrid">
   <div class="left">
     <div class="mark">
-      <h1>WRECSAM<span>.</span></h1>
+      <h1>WREXHAM<span>.</span></h1>
       <span class="badge" id="comp">Championship 2026/27</span>
     </div>
     <p class="story">Second season in the Championship &middot; chasing a fourth promotion in five years</p>
@@ -314,6 +325,11 @@ function tabs(){
     sec.setAttribute("role", "tabpanel");
     sec.setAttribute("aria-labelledby", t.id);
     t.onclick = () => {
+      if (t.dataset.p === "centre"){                 // load the embed only on view
+        const ph = document.querySelector("#centre .ytph[data-yt]");
+        if (ph) ph.outerHTML = `<iframe class="yt" src="https://www.youtube-nocookie.com/embed/`
+          + ph.dataset.yt + `" title="Match highlights" allowfullscreen></iframe>`;
+      }
     document.querySelectorAll(".tab").forEach(x => x.setAttribute("aria-selected", x === t));
     document.querySelectorAll("main section").forEach(s => s.hidden = s.id !== t.dataset.p);
     scrollTo({top: 0, behavior: "smooth"});
@@ -360,8 +376,8 @@ function hero(d){  // d used for nextInfo below
     ${d.nextInfo && d.nextInfo.weather ? `<div class="opp" style="margin-top:6px">${d.nextInfo.weather.icon} ${d.nextInfo.weather.temp}&deg;C ${esc(d.nextInfo.weather.label)}${d.nextInfo.venue ? " &middot; " + esc(d.nextInfo.venue) : ""}</div>` : ""}
     ${d.nextInfo && d.nextInfo.tv.length ? `<div class="opp">&#128250; ${d.nextInfo.tv.map(esc).join(", ")}</div>` : ""}
     ${d.nextInfo && d.nextInfo.h2h ? `<div class="opp" style="font-size:12px">${esc(d.nextInfo.h2h)}</div>` : ""}
-    <div><a class="olink" href="ics/${esc(next.id)}.ics">&#128197; Add to calendar</a>
-      <a class="olink" style="margin-left:12px" href="ics/wrexham.ics">Subscribe to all fixtures</a></div>`;
+    <div>${next.awaitingResult ? "" : `<a class="olink" href="ics/${esc(next.id)}.ics">&#128197; Add to calendar</a>`}
+      <a class="olink" style="margin-left:22px" href="ics/wrexham.ics">Subscribe to all fixtures</a></div>`;
   let iv;
   const tick = () => {
     if (next.awaitingResult){ $("#cd").textContent = "Full time"; return clearInterval(iv); }
@@ -385,7 +401,7 @@ function fixtures(d){
       ? `<div class="mres" style="color:var(--${m.result === "W" ? "w" : m.result === "L" ? "l" : "d"})">${m.us}&ndash;${m.them}</div>`
       : m.awaitingResult ? `<div class="mtag" style="color:var(--mut)">Full time</div>`
       : isNext ? `<div class="mtag">Next</div>`
-      : `<div class="mdate" style="width:auto;text-align:right">${ukTime(dt)}
+      : `<div class="mtime">${ukTime(dt)}
            ${TZ !== "Europe/London" ? `<span class="mlocal">${localTime(dt)} you</span>` : ""}</div>`;
     html += `<div class="mrow${isNext ? " is-next" : ""}">
       <div class="mdate"><b>${ukDayNo(dt)}</b>${ukDay(dt)}</div>
@@ -465,8 +481,7 @@ function centre(d){
     (L.lineups[side] || []).map(p => `<li><i>${esc(p.pos)}</i>${esc(p.name)}</li>`).join("")}</ol></div>`;
 
   const video = L.yt
-    ? `<iframe class="yt" src="https://www.youtube-nocookie.com/embed/${esc(L.yt)}"
-         title="Match highlights" allowfullscreen loading="lazy"></iframe>`
+    ? `<div class="yt ytph" data-yt="${esc(L.yt)}"></div>`
     : `<a class="olink" href="${esc(L.search)}" target="_blank" rel="noopener noreferrer">&#127916; Find highlights on YouTube &rarr;</a>`;
 
   $("#centre").innerHTML = `<div class="card">
@@ -493,7 +508,7 @@ function centre(d){
 }
 
 function odds(d){
-  const rows = d.matches.filter(m => !m.completed && d.odds[m.date.slice(0,10)]).slice(0, 5).map(m => {
+  const rows = d.matches.filter(m => !m.completed && !m.awaitingResult && d.odds[m.date.slice(0,10)]).slice(0, 5).map(m => {
     const o = d.odds[m.date.slice(0,10)], b = o.book;
     const sum = b.wrexham + b.draw + b.opponent;   // 3 binaries: prices carry spread, so > 1
     const seg = (v, c) => `<i style="width:${(v/sum*100).toFixed(1)}%;background:${c}"></i>`;
@@ -605,7 +620,7 @@ function info(d){
       <b>Podcasts</b> &mdash; the shows' own public RSS feeds.<br>
       <b>Odds</b> &mdash; live Polymarket markets. Kalshi lists the same fixtures but has no quotes on them.<br>
       <b>Kickoff weather</b> &mdash; Open-Meteo, for the venue city.<br>
-      Refreshed every 30 minutes. Last update: <b>${esc(when)}</b> UK.</div></div>
+      The refresh job is scheduled every 30 minutes, but GitHub skips slots when it is busy &mdash; in practice updates land a few times a day. The timestamp is the truth: last update <b>${esc(when)}</b> UK.</div></div>
 
   <div class="card" style="margin-top:10px"><h2>What the projection is and isn't</h2>
     <div class="note" style="margin-top:8px">The season projection is a straight-line points-per-game
