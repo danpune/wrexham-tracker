@@ -58,6 +58,26 @@ body{
   padding-bottom:env(safe-area-inset-bottom);
 }
 .wrap{max-width:720px;margin:0 auto;padding:0 var(--pad)}
+
+/* Desktop was a phone layout stretched across the screen: a 720px column in a
+   1680px window wasted 57% of the width and made the page 4000px tall. */
+@media(min-width:1000px){
+  .wrap{max-width:1120px}
+  .tabs{max-width:1120px}
+  /* band: identity left, season state right, instead of 1000px of empty red */
+  .bandgrid{display:flex;align-items:flex-end;justify-content:space-between;gap:40px}
+  .bandgrid .left{flex:1 1 auto;min-width:0}
+  .bandgrid .right{flex:0 0 360px}
+  .story{margin-top:10px}
+  .progline{margin-top:9px}
+  /* the long lists go two-up, which halves the scroll */
+  #fixtures:not([hidden]),#news:not([hidden]),#pods:not([hidden]),#squad:not([hidden]){
+    display:grid;grid-template-columns:1fr 1fr;gap:0 14px;align-content:start}
+  #fixtures .mnth,#squad .mnth{grid-column:1 / -1}
+  #news .item,#pods .item,#fixtures .mrow,#squad .mrow{margin-bottom:9px}
+  .hero{grid-template-columns:1fr 1fr;gap:14px}
+}
+@media(min-width:1400px){ .wrap,.tabs{max-width:1240px} }
 a{color:inherit;text-decoration:none}
 
 /* header */
@@ -215,14 +235,18 @@ footer img{vertical-align:middle;margin-top:5px;min-height:20px}
 </head>
 <body>
 
-<header><div class="band"><div class="wrap">
-  <div class="mark">
-    <h1>WRECSAM<span>.</span></h1>
-    <span class="badge" id="comp">Championship 2026/27</span>
+<header><div class="band"><div class="wrap bandgrid">
+  <div class="left">
+    <div class="mark">
+      <h1>WRECSAM<span>.</span></h1>
+      <span class="badge" id="comp">Championship 2026/27</span>
+    </div>
+    <p class="story">Second season in the Championship &middot; chasing a fourth promotion in five years</p>
   </div>
-  <p class="story">Second season in the Championship &middot; chasing a fourth promotion in five years</p>
-  <div class="sbar" aria-hidden="true"><i id="sbarfill"></i></div>
-  <div class="progline"><span id="prog"></span><span id="streak"></span></div>
+  <div class="right">
+    <div class="sbar" aria-hidden="true"><i id="sbarfill"></i></div>
+    <div class="progline"><span id="prog"></span><span id="streak"></span></div>
+  </div>
 </div></div><div class="wrap">
   <div class="hero">
     <div class="card" id="last"><h2>Last result</h2><div class="skel" style="padding:8px 0">—</div></div>
