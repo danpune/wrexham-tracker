@@ -312,6 +312,7 @@ function hero(d){  // d used for nextInfo below
     ${d.nextInfo && d.nextInfo.h2h ? `<div class="opp" style="font-size:12px">${esc(d.nextInfo.h2h)}</div>` : ""}
     <div><a class="olink" href="ics/${esc(next.id)}.ics">&#128197; Add to calendar</a>
       <a class="olink" style="margin-left:12px" href="ics/wrexham.ics">Subscribe to all fixtures</a></div>`;
+  let iv;
   const tick = () => {
     let s = (dt - Date.now()) / 1000;
     if (s <= 0){ $("#cd").textContent = "Kick-off"; return clearInterval(iv); }
@@ -320,7 +321,7 @@ function hero(d){  // d used for nextInfo below
   };
   tick();
   // Only tick per-second once the seconds are actually on screen.
-  const iv = setInterval(tick, (dt - Date.now()) > 36e5 ? 30000 : 1000);
+  iv = setInterval(tick, (dt - Date.now()) > 36e5 ? 30000 : 1000);
 }
 
 function fixtures(d){
@@ -578,7 +579,16 @@ fetch("data.json").then(r => r.json()).then(d => {
   const done = lg.filter(m => m.completed).length, total = lg.length;
   $("#prog").textContent = `${done} played \u00b7 ${total - done} to go`;
   $("#sbarfill").style.width = (done / total * 100) + "%";
-  hero(d); fixtures(d); table(d); centre(d); promo(d); squad(d); news(d); pods(d);
+  // One failing panel must not blank the other seven.
+  for (const [name, fn] of [["hero",hero],["fixtures",fixtures],["table",table],["centre",centre],
+                            ["promo",promo],["squad",squad],["news",news],["pods",pods]]){
+    try { fn(d); }
+    catch (err) {
+      console.error(name + " failed", err);
+      const el = $("#" + (name === "hero" ? "fixtures" : name));
+      if (el && !el.innerHTML) el.innerHTML = "<div class='skel'>This section couldn&rsquo;t load.</div>";
+    }
+  }
   info(d);
   const tc = $("#tocentre");
   if (tc) tc.onclick = e => { e.preventDefault(); document.querySelectorAll(".tab")[2].click(); };
