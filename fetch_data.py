@@ -118,7 +118,6 @@ def fetch_matches():
                 "us": us_score,
                 "them": them_score,
                 "result": result,
-                "state": status.get("detail", ""),
             })
     out.sort(key=lambda m: m["date"])
     try:
@@ -162,7 +161,10 @@ def fetch_table():
 
 # --- news ---------------------------------------------------------------------
 def fetch_news(limit=40):
-    root = ET.fromstring(get(NEWS_FEED))
+    try:
+        root = ET.fromstring(get(NEWS_FEED))
+    except Exception:
+        return []          # news going down must not stop scores from updating
     items = []
     for it in root.iter("item"):
         title = unescape(it.findtext("title") or "")
@@ -380,11 +382,19 @@ def fetch_weather(city, when):
         return None
 
 
+def next_match(matches):
+    """The same two-step rule the page uses, so the fetcher cannot pick a
+    different fixture and pin its venue, weather and TV to another match."""
+    return (next((m for m in matches
+                  if not m["completed"] and not m.get("awaitingResult")), None)
+            or next((m for m in matches if not m["completed"]), None))
+
+
 def fetch_next_info(matches):
     """Broadcast + head-to-head for the next fixture. Where-to-watch matters a
     lot here: much of Wrexham's audience found the club through the series and
     is watching from outside the UK."""
-    nxt = next((m for m in matches if not m["completed"]), None)
+    nxt = next_match(matches)
     if not nxt:
         return None
     try:
@@ -462,7 +472,9 @@ def vevent(m):
     vs = f"Wrexham v {m['opponent']}" if m["home"] else f"{m['opponent']} v Wrexham"
     tag = "" if m["comp"] == "League" else f" ({m['comp']})"
     return ["BEGIN:VEVENT", f"UID:{m['id']}@wrexham-tracker",
-            "DTSTAMP:" + datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ"),
+            # derived from the fixture, not the run: a per-run stamp rewrote
+            # every file on every cron and buried real changes in noise
+            "DTSTAMP:" + start,
             f"DTSTART:{start}", f"DTEND:{end}",
             f"SUMMARY:{vs} \u26bd{tag}".replace(",", ""),
             "LOCATION:" + (m.get("venue") or "").replace(",", " "),
@@ -477,7 +489,7 @@ def write_ics(matches):
     os.makedirs(icsdir, exist_ok=True)
     keep, feed = set(), []
     for m in matches:
-        if m["completed"]:
+        if m["completed"] or m.get("awaitingResult"):
             continue
         try:
             ev = vevent(m)
@@ -501,6 +513,12 @@ def write_ics(matches):
 
 def main():
     matches = fetch_matches()
+    league = sum(1 for m in matches if m["comp"] == "League")
+    if league < TOTAL_GAMES:
+        # Failing here is the safe outcome: CI makes no commit and the last good
+        # data.json stays deployed.
+        raise SystemExit(f"only {league}/{TOTAL_GAMES} league fixtures from ESPN; "
+                         "refusing to write a truncated season")
     table = fetch_table()
     data = {
         "updated": datetime.now(timezone.utc).isoformat(timespec="seconds"),

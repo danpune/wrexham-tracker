@@ -70,7 +70,6 @@ ALIASES = {
     "preston north end": "preston",
     "sheffield united": "sheff utd",
     "sheffield wednesday": "sheff wed",
-    "brighton & hove albion": "brighton",
 }
 
 

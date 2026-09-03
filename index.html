@@ -277,7 +277,8 @@ const localTime = d => d.toLocaleTimeString("en-GB", {hour:"2-digit", minute:"2-
 
 function ago(iso){
   const m = (Date.now() - new Date(iso)) / 6e4;
-  if (m < 60)   return Math.max(1, Math.round(m)) + "m ago";
+  if (m < 1)    return "just now";        // clock skew in feeds gives negatives
+  if (m < 60)   return Math.round(m) + "m ago";
   if (m < 1440) return Math.round(m / 60) + "h ago";
   return Math.round(m / 1440) + "d ago";
 }
@@ -371,6 +372,7 @@ function fixtures(d){
       ${right}
       ${m.completed
           ? (m.yt ? `<a class="cal hl" href="https://www.youtube.com/watch?v=${esc(m.yt)}" target="_blank" rel="noopener noreferrer" aria-label="Watch ${esc(m.opponent)} highlights">&#127916;</a>` : "")
+          : m.awaitingResult ? ""
           : `<a class="cal" href="ics/${esc(m.id)}.ics" aria-label="Add ${esc(m.opponent)} match to your calendar">+ Cal</a>`}</div>`;
   }
   $("#fixtures").innerHTML = html;
@@ -633,7 +635,7 @@ fetch("data.json").then(r => r.json()).then(d => {
   }
   info(d);
   const tc = $("#tocentre");
-  if (tc) tc.onclick = e => { e.preventDefault(); document.querySelectorAll(".tab")[2].click(); };
+  if (tc) tc.onclick = e => { e.preventDefault(); document.querySelector('.tab[data-p="centre"]').click(); };
   const sb = $("#sharebtn"); if (sb) sb.onclick = () => shareResult(d);
   $("#stamp").textContent = "Updated " + ago(d.updated);
 }).catch(() => { $("#fixtures").innerHTML = "<div class='skel'>Couldn&rsquo;t load data. Try a refresh.</div>"; });
