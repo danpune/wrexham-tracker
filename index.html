@@ -30,6 +30,7 @@
   --w:#1a7f37; --d:#5c6570; --l:#c8102e;
   --chip:rgba(0,0,0,.05);          /* backing behind crests */
   --neutral:#b6bec7;               /* the "other team" half of a stat bar */
+  --pill-d:#6b7480;                /* same grey, darkened enough to carry white text */
   --navbg:rgba(242,244,246,.93);
   --cup-bg:#fff6e0; --cup-tx:#8a6100; --cup-line:#efd79a;
   --nextbg:linear-gradient(180deg,#fff2f3,var(--panel));
@@ -39,10 +40,10 @@
 @media (prefers-color-scheme: dark){
   :root{
     --bg:#0d0f12; --panel:#15181d; --panel2:#1b1f26; --line:#262b33;
-    --tx:#e9ecf1; --mut:#8b929e; --red:#e0242f; --red-dim:#7a1a20;
-    --w:#2ea043; --d:#8b929e; --l:#e0242f;
+    --tx:#e9ecf1; --mut:#8b929e; --red:#f26670; --red-dim:#7a1a20;
+    --w:#3fb950; --d:#8b929e; --l:#f26670;
     --chip:rgba(255,255,255,.09);
-    --neutral:#4a5058;
+    --neutral:#4a5058; --pill-d:#4a5058;
     --navbg:rgba(13,15,18,.93);
     --cup-bg:#241f10; --cup-tx:#ffd166; --cup-line:#4a3d1a;
     --nextbg:linear-gradient(180deg,#1c1418,var(--panel));
@@ -82,14 +83,15 @@ header{padding:22px 0 14px;border-bottom:1px solid var(--line)}
 .form{display:flex;gap:5px;margin-top:11px}
 .pill{width:23px;height:23px;border-radius:6px;display:grid;place-items:center;
   font-size:12px;font-weight:800;color:#fff}
-.pill.W{background:var(--w)} .pill.D{background:var(--neutral)} .pill.L{background:var(--l)}
+.pill.W{background:var(--w)} .pill.D{background:var(--pill-d)} .pill.L{background:var(--l)}
 
 /* tabs */
 nav{position:sticky;top:0;z-index:9;background:var(--navbg);
   backdrop-filter:blur(10px);border-bottom:1px solid var(--line);margin-top:4px}
 .tabs{display:flex;gap:2px;overflow-x:auto;scrollbar-width:none;max-width:720px;margin:0 auto;padding:0 var(--pad)}
 .tabs::-webkit-scrollbar{display:none}
-.tab{flex:0 0 auto;padding:13px 12px;font-size:14px;font-weight:600;color:var(--mut);
+@media(max-width:430px){.tabs{mask-image:linear-gradient(90deg,#000 88%,transparent)}}
+.tab{flex:0 0 auto;padding:13px 10px;font-size:13.5px;font-weight:600;color:var(--mut);
   border-bottom:2px solid transparent;cursor:pointer;background:none;border-top:0;border-left:0;border-right:0;font-family:inherit}
 .tab[aria-selected=true]{color:var(--tx);border-bottom-color:var(--red)}
 
@@ -296,7 +298,7 @@ function hero(d){  // d used for nextInfo below
         ${d.lastMatch.stats.us.possessionPct}% possession &middot; ${d.lastMatch.stats.us.totalShots} shots</div>` : ""}
       <div><a class="olink" href="#" id="tocentre">Match centre &rarr;</a></div>`;
   }
-  const next = d.matches.find(m => !m.completed);
+  const next = d.matches.find(m => !m.completed && !m.awaitingResult) || d.matches.find(m => !m.completed);
   if (!next){ $("#next").innerHTML = "<h2>Next match</h2><div class='opp'>Season complete</div>"; return; }
   const dt = new Date(next.date);
   const when = dt.toLocaleString("en-GB", {...UK, weekday:"short", day:"numeric", month:"short",
@@ -314,6 +316,7 @@ function hero(d){  // d used for nextInfo below
       <a class="olink" style="margin-left:12px" href="ics/wrexham.ics">Subscribe to all fixtures</a></div>`;
   let iv;
   const tick = () => {
+    if (next.awaitingResult){ $("#cd").textContent = "Full time"; return clearInterval(iv); }
     let s = (dt - Date.now()) / 1000;
     if (s <= 0){ $("#cd").textContent = "Kick-off"; return clearInterval(iv); }
     const dd = Math.floor(s/86400), hh = Math.floor(s%86400/3600), mm = Math.floor(s%3600/60);
@@ -351,7 +354,7 @@ function fixtures(d){
 function table(d){
   const rows = d.table.map(r => {
     const cls = [r.isWrexham ? "wxm" : "", (r.rank === 7 || r.rank === 22) ? "line" : ""].join(" ").trim();
-    return `<tr class="${cls}"><td>${r.rank}</td><td><img class="crest" style="width:17px;height:17px;flex:none;vertical-align:-4px;margin-right:7px" src="${esc(r.logo)}" alt="" loading="lazy">${esc(r.team)}</td>
+    return `<tr class="${cls}"><td>${r.rank}</td><td data-ded="${r.deducted > 0 ? r.deducted : ""}"><img class="crest" style="width:17px;height:17px;flex:none;vertical-align:-4px;margin-right:7px" src="${esc(r.logo)}" alt="" loading="lazy">${esc(r.team)}${r.deducted > 0 ? `<sup title="${r.deducted} point deduction" style="color:var(--red);font-weight:700">-${r.deducted}</sup>` : ""}</td>
       <td>${r.played}</td><td class="hide-sm">${r.won}</td><td class="hide-sm">${r.drawn}</td>
       <td class="hide-sm">${r.lost}</td><td>${r.gd > 0 ? "+" : ""}${r.gd}</td><td>${r.points}</td></tr>`;
   }).join("");
@@ -402,9 +405,11 @@ function centre(d){
   };
 
   const timeline = L.events.length ? `<div class="tl">${L.events.map(e => `
-    <div class="${e.kind === "goal" ? "g" : ""}"><b>${esc(e.clock)}</b>
-      ${e.kind === "goal" ? "&#9917;" : e.kind === "red" ? "&#128308;" : "&#129000;"}
-      ${esc(e.who || "")} <em>${e.us ? "Wrexham" : esc(m.opponent)}</em></div>`).join("")}</div>` : "";
+    <div class="${["goal","own","pen"].includes(e.kind) ? "g" : ""}"><b>${esc(e.clock)}</b>
+      ${e.kind === "goal" || e.kind === "own" || e.kind === "pen" ? "&#9917;"
+        : e.kind === "red" ? "&#128308;" : "&#129000;"}
+      ${esc(e.who || "")}${e.kind === "own" ? " <em>(OG)</em>" : e.kind === "pen" ? " <em>(pen)</em>" : ""}
+      <em>${e.us ? "Wrexham" : esc(m.opponent)}</em></div>`).join("")}</div>` : "";
 
   const xi = side => `<div><h4>${side === "us" ? "Wrexham" : esc(m.opponent)}</h4><ol>${
     (L.lineups[side] || []).map(p => `<li><i>${esc(p.pos)}</i>${esc(p.name)}</li>`).join("")}</ol></div>`;
@@ -457,7 +462,7 @@ function odds(d){
   return (rows || `<div class="card"><div class="note" style="margin:0">No live markets for the
     next fixtures yet. Polymarket usually lists a Championship match a few days out.</div></div>`) +
     `<div class="note">Prices are live Polymarket markets &mdash; what people are actually betting, not a model.
-     Each of the three outcomes is its own contract, so the percentages include spread and sum above 100%.<br>
+     Each of the three outcomes is its own contract, so the percentages may not sum to exactly 100%.<br>
      Kalshi lists these same fixtures but every contract is currently quoteless &mdash; no bid, ask or open
      interest &mdash; so there is nothing to show from it.<br>
      Display only. This site has no trading integration and nothing here is betting or financial advice.</div>`;
@@ -521,16 +526,16 @@ function squad(d){
 }
 
 function news(d){
-  $("#news").innerHTML = d.news.map(n => `<a class="item" href="${esc(n.url)}" target="_blank" rel="noopener">
+  $("#news").innerHTML = (d.news.length ? "" : "<div class='skel'>No news right now.</div>") + d.news.map(n => `<a class="item" href="${esc(n.url)}" target="_blank" rel="noopener">
     <div class="meta"><span class="src">${esc(n.source)}</span><span>${ago(n.published)}</span></div>
     <h3>${esc(n.title)}</h3></a>`).join("");
 }
 
 function pods(d){
-  $("#pods").innerHTML = d.podcasts.map(p => `<div class="item">
+  $("#pods").innerHTML = (d.podcasts.length ? "" : "<div class='skel'>No episodes right now.</div>") + d.podcasts.map(p => `<div class="item">
     <div class="meta"><span class="src">${esc(p.show)}</span><span>${ago(p.published)}</span></div>
     <h3>${esc(p.title)}</h3>
-    ${p.audio ? `<audio controls preload="none" src="${esc(p.audio)}"></audio>`
+    ${p.audio ? `<audio controls preload="none" src="${esc(p.audio)}" aria-label="Play: ${esc(p.title)}"></audio>`
               : `<p><a href="${esc(p.url)}" target="_blank" rel="noopener">Listen on BBC Sounds &rarr;</a></p>`}
   </div>`).join("");
 }

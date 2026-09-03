@@ -66,8 +66,8 @@ def key_words(opponent):
     drop = {"city", "town", "united", "athletic", "rovers", "wanderers", "county",
             "albion", "forest", "fc", "afc"}
     words = [w.lower() for w in re.sub(r"[^\w\s]", " ", opponent).split()]
-    keep = [w for w in words if w not in drop]
-    return set(keep or words)
+    keep = [w for w in words if w not in drop and len(w) >= 5]
+    return set(keep or [w for w in words if w not in drop] or words)
 
 
 def main():
@@ -98,7 +98,12 @@ def main():
             if vid in used:
                 continue
             t = title.lower()
-            if "highlight" not in t or not any(w in t for w in words):
+            # every one of these channels names both clubs, so requiring
+            # "wrexham" plus ALL of the opponent's distinctive words on word
+            # boundaries kills the West Ham / West Bromwich collision.
+            if "highlight" not in t or "wrexham" not in t:
+                continue
+            if not all(re.search(rf"\b{re.escape(w)}\b", t) for w in words):
                 continue
             if not official(vid):
                 continue

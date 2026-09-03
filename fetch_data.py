@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Build data.json for the Wrexham tracker from free public feeds (no API keys)."""
 
-import json, os, re, time, urllib.parse, urllib.request, xml.etree.ElementTree as ET
+import calendar, json, os, re, time, urllib.parse, urllib.request, xml.etree.ElementTree as ET
 from datetime import datetime, timedelta, timezone
 from email.utils import parsedate_to_datetime
 from html import unescape
@@ -74,7 +74,7 @@ def fetch_matches():
     out = []
     for league, comp_name in COMPETITIONS:
       for year, month in SEASON_MONTHS:
-        last = 31 if month in (1, 3, 5, 7, 8, 10, 12) else 30 if month != 2 else 28
+        last = calendar.monthrange(year, month)[1]
         url = (f"https://site.api.espn.com/apis/site/v2/sports/soccer/{league}/scoreboard"
                f"?dates={year}{month:02d}01-{year}{month:02d}{last}")
         try:
@@ -91,6 +91,12 @@ def fetch_matches():
             them = next(t for t in teams if t["team"]["id"] != TEAM_ID)
             status = comp.get("status", {}).get("type", {})
             done = status.get("completed", False)
+            # ESPN can lag ~1h+ past full time before flipping this. Treat a
+            # long-past kickoff as no longer upcoming so the UI doesn't count
+            # down to a match that has finished.
+            kickoff = datetime.fromisoformat(iso(ev["date"]))
+            stale = (not done and
+                     datetime.now(timezone.utc) - kickoff > timedelta(hours=2.5))
             us_score = int(us.get("score") or 0) if done else None
             them_score = int(them.get("score") or 0) if done else None
             result = None
@@ -108,6 +114,7 @@ def fetch_matches():
                 "home": us.get("homeAway") == "home",
                 "venue": comp.get("venue", {}).get("fullName", ""),
                 "completed": done,
+                "awaitingResult": stale,
                 "us": us_score,
                 "them": them_score,
                 "result": result,
@@ -145,6 +152,7 @@ def fetch_table():
             "ga": val("pointsAgainst"),
             "gd": val("pointDifferential"),
             "points": val("points"),
+            "deducted": val("deductions"),
             "logo": LOGO % e["team"]["id"],
             "isWrexham": e["team"]["id"] == TEAM_ID,
         })
@@ -234,7 +242,8 @@ def fetch_odds(matches, lookahead=5):
     to read from it. Add it here if that changes.
     """
     odds = {}
-    upcoming = [m for m in matches if not m["completed"]][:lookahead]
+    upcoming = [m for m in matches
+                if not m["completed"] and not m.get("awaitingResult")][:lookahead]
     for m in upcoming:
         day = m["date"][:10]
         term = urllib.parse.quote(m["opponent"].split()[0] + " Wrexham")
@@ -298,10 +307,14 @@ def fetch_summary(matches):
         who = (k.get("participants") or [{}])[0].get("athlete", {}).get("displayName", "")
         goals.append({
             "clock": (k.get("clock") or {}).get("displayValue", ""),
-            "kind": "goal" if k.get("scoringPlay") else
+            "kind": "own" if "Own Goal" in kind else
+                    "pen" if "Penalty" in kind and k.get("scoringPlay") else
+                    "goal" if k.get("scoringPlay") else
                     "red" if "Red" in kind else "yellow",
             "who": who,
-            "us": (k.get("team") or {}).get("id") == TEAM_ID,
+            # ESPN credits an own goal to the team that benefits; the player is
+            # on the other side, so flip it to keep scorer and XI consistent.
+            "us": ((k.get("team") or {}).get("id") == TEAM_ID) != ("Own Goal" in kind),
         })
 
     lineups = {}
@@ -314,7 +327,7 @@ def fetch_summary(matches):
 
     hl = {}
     try:                                  # optional, curated, merge-only
-        with open("highlights.json") as f:
+        with open(os.path.join(DIR, "highlights.json")) as f:
             hl = json.load(f).get("highlights", {})
     except (OSError, ValueError):
         pass
@@ -449,6 +462,7 @@ def vevent(m):
     vs = f"Wrexham v {m['opponent']}" if m["home"] else f"{m['opponent']} v Wrexham"
     tag = "" if m["comp"] == "League" else f" ({m['comp']})"
     return ["BEGIN:VEVENT", f"UID:{m['id']}@wrexham-tracker",
+            "DTSTAMP:" + datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ"),
             f"DTSTART:{start}", f"DTEND:{end}",
             f"SUMMARY:{vs} \u26bd{tag}".replace(",", ""),
             "LOCATION:" + (m.get("venue") or "").replace(",", " "),
