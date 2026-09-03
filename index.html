@@ -59,29 +59,7 @@ body{
 }
 .wrap,.tabs{max-width:720px;margin:0 auto;padding:0 var(--pad)}
 
-/* Desktop was a phone layout stretched across the screen: a 720px column in a
-   1680px window wasted 57% of the width and made the page 4000px tall. */
-@media(min-width:1000px){
-  .wrap{max-width:1120px}
-  .tabs{max-width:1120px}
-  /* band: identity left, season state right, instead of 1000px of empty red */
-  .bandgrid{display:flex;align-items:flex-end;justify-content:space-between;gap:40px}
-  .bandgrid .left{flex:1 1 auto;min-width:0}
-  .bandgrid .right{flex:0 0 360px}
-  .story{margin-top:10px}
-  .progline{margin-top:9px}
-  /* the long lists go two-up, which halves the scroll */
-  #fixtures:not([hidden]),#news:not([hidden]),#pods:not([hidden]),#squad:not([hidden]){
-    display:grid;grid-template-columns:1fr 1fr;gap:0 14px;align-content:start}
-  #fixtures .mnth,#squad .mnth{grid-column:1 / -1}
-  #news .item,#pods .item,#fixtures .mrow,#squad .mrow{margin-bottom:9px}
-  .hero{grid-template-columns:1fr 1fr;gap:14px}
-  /* a league table is a reading unit, not a full-bleed one */
-  #table table{max-width:660px}
-  .tkey{max-width:660px}
-  .story{max-width:46em}
-}
-@media(min-width:1400px){ .wrap,.tabs{max-width:1240px} }
+
 a{color:inherit;text-decoration:none}
 
 /* header */
@@ -92,7 +70,7 @@ header{border-bottom:1px solid var(--line)}
 .mark h1{font-size:30px;font-weight:800;letter-spacing:-1px;line-height:1}
 .mark h1 span{color:#ffd166}
 .story{font-size:12.5px;line-height:1.45;color:rgba(255,255,255,.86);margin-top:8px;max-width:34em}
-.bandgrid .right{flex:0 1 360px}
+.bandgrid .right{flex:1 1 auto;min-width:220px;max-width:420px}
 .badge{font-size:10.5px;font-weight:800;letter-spacing:.6px;text-transform:uppercase;
   color:#fff;border:1px solid rgba(255,255,255,.45);border-radius:999px;padding:3px 9px}
 .progline{display:flex;justify-content:space-between;gap:10px;margin-top:7px;
@@ -103,6 +81,16 @@ header{border-bottom:1px solid var(--line)}
 .sbar{height:5px;background:rgba(0,0,0,.28);border-radius:3px;margin-top:14px;overflow:hidden}
 .sbar i{display:block;height:100%;background:#ffd166;border-radius:3px;width:0;transition:width .6s ease}
 .hero{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:14px 0 16px}
+.hero3{display:none}
+@media(min-width:1000px){.hero3{display:block}}
+.mini{width:100%;border-collapse:collapse;font-size:13px;font-variant-numeric:tabular-nums;margin-top:8px}
+.mini td{padding:6px 0;border-top:1px solid var(--line)}
+.mini td:first-child{width:22px;color:var(--mut);font-size:11px}
+.mini td:nth-child(2){width:100%;font-weight:600}
+.mini td:last-child{text-align:right;font-weight:700}
+.mini tr.me td{background:rgba(200,16,46,.09)}
+.mini tr.me td:nth-child(2){box-shadow:inset 3px 0 0 var(--red)}
+.mini tr.cut td{border-top:2px solid var(--red-dim)}
 @media(max-width:520px){.hero{grid-template-columns:1fr}}
 .card{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:14px;box-shadow:var(--shadow)}
 .card h2{font-size:11px;font-weight:700;letter-spacing:.7px;text-transform:uppercase;color:var(--mut);margin-bottom:9px}
@@ -250,6 +238,30 @@ footer img{vertical-align:middle;margin-top:5px;min-height:20px}
 .olink{display:inline-block;margin-top:11px;font-size:12px;color:var(--red);font-weight:600;
   padding:6px 0;min-height:24px}
 .skel{color:var(--mut);padding:26px 0;text-align:center;font-size:14px}
+
+/* Desktop was a phone layout stretched across the screen: a 720px column in a
+   1680px window wasted 57% of the width and made the page 4000px tall. */
+@media(min-width:1000px){
+  .wrap{max-width:1120px}
+  .tabs{max-width:1120px}
+  /* band: identity left, season state right, instead of 1000px of empty red */
+  .bandgrid{display:flex;align-items:flex-end;gap:36px}
+  .bandgrid .left{flex:0 1 auto;min-width:0}
+  .bandgrid .right{flex:0 0 360px}
+  .story{margin-top:10px}
+  .progline{margin-top:9px}
+  /* the long lists go two-up, which halves the scroll */
+  #fixtures:not([hidden]),#news:not([hidden]),#pods:not([hidden]),#squad:not([hidden]){
+    display:grid;grid-template-columns:1fr 1fr;gap:0 14px;align-content:start}
+  #fixtures .mnth,#squad .mnth{grid-column:1 / -1}
+  #news .item,#pods .item,#fixtures .mrow,#squad .mrow{margin-bottom:9px}
+  .hero{grid-template-columns:1fr 1fr 1fr;gap:14px}
+  /* a league table is a reading unit, not a full-bleed one */
+  #table table{max-width:660px}
+  .tkey{max-width:660px}
+  .story{max-width:none;white-space:nowrap}
+}
+@media(min-width:1400px){ .wrap,.tabs{max-width:1240px} }
 </style>
 </head>
 <body>
@@ -270,6 +282,7 @@ footer img{vertical-align:middle;margin-top:5px;min-height:20px}
   <div class="hero">
     <div class="card" id="last"><h2>Last result</h2><div class="skel" style="padding:8px 0">—</div></div>
     <div class="card" id="next"><h2>Next match</h2><div class="skel" style="padding:8px 0">—</div></div>
+  <div class="card hero3" id="stand"></div>
   </div>
 </div></header>
 
@@ -489,6 +502,21 @@ function promo(d){
       What the market thinks</h2>` + odds(d);
 }
 
+// The third hero slot: where Wrexham actually sit, without changing tab.
+function standing(d){
+  const el = $("#stand"); if (!el) return;
+  const i = d.table.findIndex(r => r.isWrexham);
+  if (i < 0){ el.innerHTML = ""; return; }
+  const from = Math.max(0, Math.min(i - 2, d.table.length - 5));
+  const rows = d.table.slice(from, from + 5).map(r => `
+    <tr class="${r.isWrexham ? "me" : ""}${r.rank === 7 ? " cut" : ""}">
+      <td>${r.rank}</td>
+      <td><img class="crest" style="width:16px;height:16px;flex:none;vertical-align:-3px;margin-right:6px" src="${esc(r.logo)}" alt="" loading="lazy">${esc(r.abbr || r.team)}</td>
+      <td>${r.points}</td></tr>`).join("");
+  el.innerHTML = `<h2>Where they stand</h2><table class="mini"><tbody>${rows}</tbody></table>
+    <div class="note" style="margin-top:9px;font-size:11px">Red line is the playoff cut &mdash; top 6 go up or into the playoffs.</div>`;
+}
+
 function centre(d){
   const L = d.lastMatch;
   if (!L){ $("#centre").innerHTML = "<div class='skel'>No completed match yet.</div>"; return; }
@@ -694,7 +722,7 @@ fetch("data.json").then(r => r.json()).then(d => {
   $("#sbarfill").style.width = (done / total * 100) + "%";
   // One failing panel must not blank the other seven.
   for (const [name, fn] of [["hero",hero],["fixtures",fixtures],["table",table],["centre",centre],
-                            ["promo",promo],["squad",squad],["news",news],["pods",pods]]){
+                            ["promo",promo],["standing",standing],["squad",squad],["news",news],["pods",pods]]){
     try { fn(d); }
     catch (err) {
       console.error(name + " failed", err);
