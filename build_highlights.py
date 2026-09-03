@@ -61,6 +61,35 @@ def official(video_id):
     return (d.get("author_url") or "").lower().rstrip("/") in OFFICIAL
 
 
+# What these channels actually call clubs in titles. Without these, requiring
+# every token rejects "West Brom", "Wolves", "QPR", "Preston".
+ALIASES = {
+    "queens park rangers": "qpr",
+    "west bromwich albion": "west brom",
+    "wolverhampton wanderers": "wolves",
+    "preston north end": "preston",
+    "sheffield united": "sheff",
+    "sheffield wednesday": "sheff wed",
+    "nottingham forest": "forest",
+    "brighton & hove albion": "brighton",
+}
+
+
+def matches_title(opponent, title):
+    """A title is this fixture's only if it names Wrexham and the opponent.
+
+    The "wrexham" guard is what kills the West Ham / West Bromwich collision --
+    both are in this division and @theEFL uploads highlights for every fixture.
+    """
+    t = title.lower()
+    if "highlight" not in t or "wrexham" not in t:
+        return False
+    alias = ALIASES.get(opponent.lower())
+    if alias and re.search(rf"\b{re.escape(alias)}\b", t):
+        return True
+    return all(re.search(rf"\b{re.escape(w)}\b", t) for w in key_words(opponent))
+
+
 def key_words(opponent):
     """'Birmingham City' -> {'birmingham'}: the distinctive word to match on."""
     drop = {"city", "town", "united", "athletic", "rovers", "wanderers", "county",
@@ -75,6 +104,12 @@ def main():
     path = os.path.join(DIR, "highlights.json")
     doc = json.load(open(path))
     hl = doc.setdefault("highlights", {})
+
+    dropped = [mid for mid, v in hl.items()
+               if v.get("title") and not matches_title(v.get("opponent", ""), v["title"])]
+    for mid in dropped:
+        print(f"  dropping stale/mismatched entry {mid}: {hl[mid].get('title','')[:60]}")
+        del hl[mid]
 
     videos = []
     for handle in CHANNELS:
@@ -93,17 +128,10 @@ def main():
     for m in done:
         if m["id"] in hl:
             continue
-        words = key_words(m["opponent"])
         for vid, title in videos:
             if vid in used:
                 continue
-            t = title.lower()
-            # every one of these channels names both clubs, so requiring
-            # "wrexham" plus ALL of the opponent's distinctive words on word
-            # boundaries kills the West Ham / West Bromwich collision.
-            if "highlight" not in t or "wrexham" not in t:
-                continue
-            if not all(re.search(rf"\b{re.escape(w)}\b", t) for w in words):
+            if not matches_title(m["opponent"], title):
                 continue
             if not official(vid):
                 continue
@@ -113,7 +141,7 @@ def main():
             print(f"  {m['date'][:10]} v {m['opponent']}: {vid}  {title[:56]}")
             break
 
-    if added:
+    if added or dropped:
         json.dump(doc, open(path, "w"), indent=1)
     print(f"added {added}, total {len(hl)}")
 

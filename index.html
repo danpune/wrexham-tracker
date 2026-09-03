@@ -30,7 +30,9 @@
   --w:#1a7f37; --d:#5c6570; --l:#c8102e;
   --chip:rgba(0,0,0,.05);          /* backing behind crests */
   --neutral:#b6bec7;               /* the "other team" half of a stat bar */
-  --pill-d:#6b7480;                /* same grey, darkened enough to carry white text */
+  --pill-d:#6b7480;                /* pill backgrounds carry white text, so they are   */
+  --pill-w:#1a7f37;                /* split from the --w/--l text colours and stay fixed */
+  --pill-l:#c8102e;                /* across both themes                                 */
   --navbg:rgba(242,244,246,.93);
   --cup-bg:#fff6e0; --cup-tx:#8a6100; --cup-line:#efd79a;
   --nextbg:linear-gradient(180deg,#fff2f3,var(--panel));
@@ -83,7 +85,7 @@ header{padding:22px 0 14px;border-bottom:1px solid var(--line)}
 .form{display:flex;gap:5px;margin-top:11px}
 .pill{width:23px;height:23px;border-radius:6px;display:grid;place-items:center;
   font-size:12px;font-weight:800;color:#fff}
-.pill.W{background:var(--w)} .pill.D{background:var(--pill-d)} .pill.L{background:var(--l)}
+.pill.W{background:var(--pill-w)} .pill.D{background:var(--pill-d)} .pill.L{background:var(--pill-l)}
 
 /* tabs */
 nav{position:sticky;top:0;z-index:9;background:var(--navbg);
@@ -284,6 +286,11 @@ function tabs(){
   });
 }
 
+// One definition of "next", shared by the hero and the fixtures list, so they
+// cannot disagree when ESPN is late marking a match complete.
+const nextMatch = d => d.matches.find(m => !m.completed && !m.awaitingResult)
+                    || d.matches.find(m => !m.completed);
+
 function hero(d){  // d used for nextInfo below
   const played = d.matches.filter(m => m.completed);
   const last = played[played.length - 1];
@@ -298,7 +305,7 @@ function hero(d){  // d used for nextInfo below
         ${d.lastMatch.stats.us.possessionPct}% possession &middot; ${d.lastMatch.stats.us.totalShots} shots</div>` : ""}
       <div><a class="olink" href="#" id="tocentre">Match centre &rarr;</a></div>`;
   }
-  const next = d.matches.find(m => !m.completed && !m.awaitingResult) || d.matches.find(m => !m.completed);
+  const next = nextMatch(d);
   if (!next){ $("#next").innerHTML = "<h2>Next match</h2><div class='opp'>Season complete</div>"; return; }
   const dt = new Date(next.date);
   const when = dt.toLocaleString("en-GB", {...UK, weekday:"short", day:"numeric", month:"short",
@@ -332,9 +339,10 @@ function fixtures(d){
   for (const m of d.matches){
     const dt = new Date(m.date), mn = ukMonth(dt);
     if (mn !== month){ html += `<div class="mnth">${mn}</div>`; month = mn; }
-    const isNext = m === d.matches.find(x => !x.completed);
+    const isNext = m === nextMatch(d);
     const right = m.completed
       ? `<div class="mres" style="color:var(--${m.result === "W" ? "w" : m.result === "L" ? "l" : "d"})">${m.us}&ndash;${m.them}</div>`
+      : m.awaitingResult ? `<div class="mtag" style="color:var(--mut)">Full time</div>`
       : isNext ? `<div class="mtag">Next</div>`
       : `<div class="mdate" style="width:auto;text-align:right">${ukTime(dt)}
            ${TZ !== "Europe/London" ? `<span class="mlocal">${localTime(dt)} you</span>` : ""}</div>`;
@@ -354,7 +362,7 @@ function fixtures(d){
 function table(d){
   const rows = d.table.map(r => {
     const cls = [r.isWrexham ? "wxm" : "", (r.rank === 7 || r.rank === 22) ? "line" : ""].join(" ").trim();
-    return `<tr class="${cls}"><td>${r.rank}</td><td data-ded="${r.deducted > 0 ? r.deducted : ""}"><img class="crest" style="width:17px;height:17px;flex:none;vertical-align:-4px;margin-right:7px" src="${esc(r.logo)}" alt="" loading="lazy">${esc(r.team)}${r.deducted > 0 ? `<sup title="${r.deducted} point deduction" style="color:var(--red);font-weight:700">-${r.deducted}</sup>` : ""}</td>
+    return `<tr class="${cls}"><td>${r.rank}</td><td data-ded="${r.deducted > 0 ? r.deducted : ""}"><img class="crest" style="width:17px;height:17px;flex:none;vertical-align:-4px;margin-right:7px" src="${esc(r.logo)}" alt="" loading="lazy">${esc(r.team)}${r.deducted > 0 ? `<sup aria-label="minus ${r.deducted} points" title="${r.deducted} point deduction" style="color:var(--red);font-weight:700"> -${r.deducted}</sup>` : ""}</td>
       <td>${r.played}</td><td class="hide-sm">${r.won}</td><td class="hide-sm">${r.drawn}</td>
       <td class="hide-sm">${r.lost}</td><td>${r.gd > 0 ? "+" : ""}${r.gd}</td><td>${r.points}</td></tr>`;
   }).join("");
@@ -578,6 +586,7 @@ function info(d){
     target="_blank" rel="noopener noreferrer" style="color:var(--red);font-weight:600">Open an issue</a>.</div></div>`;
 }
 
+tabs();
 fetch("data.json").then(r => r.json()).then(d => {
   $("#comp").textContent = d.competition + " " + d.season;
   const lg = d.matches.filter(m => m.comp === "League");   // cups don't belong in league progress
@@ -599,7 +608,6 @@ fetch("data.json").then(r => r.json()).then(d => {
   if (tc) tc.onclick = e => { e.preventDefault(); document.querySelectorAll(".tab")[2].click(); };
   const sb = $("#sharebtn"); if (sb) sb.onclick = () => shareResult(d);
   $("#stamp").textContent = "Updated " + ago(d.updated);
-  tabs();
 }).catch(() => { $("#fixtures").innerHTML = "<div class='skel'>Couldn&rsquo;t load data. Try a refresh.</div>"; });
 </script>
 </body>
