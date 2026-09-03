@@ -512,6 +512,12 @@ def write_ics(matches):
 
 
 def main():
+    try:
+        with open(os.path.join(DIR, "data.json")) as f:
+            previous = json.load(f)
+    except (OSError, ValueError):
+        previous = {}
+
     matches = fetch_matches()
     league = sum(1 for m in matches if m["comp"] == "League")
     if league < TOTAL_GAMES:
@@ -526,8 +532,8 @@ def main():
         "competition": "EFL Championship",
         "matches": matches,
         "table": table,
-        "news": fetch_news(),
-        "podcasts": fetch_podcasts(),
+        "news": fetch_news() or previous.get("news", []),
+        "podcasts": fetch_podcasts() or previous.get("podcasts", []),
         "projection": project(table, matches),
         "odds": fetch_odds(matches),
         "lastMatch": fetch_summary(matches),

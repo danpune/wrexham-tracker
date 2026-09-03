@@ -5,8 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>Wrexham Tracker — Championship 2026/27</title>
 <meta name="description" content="Wrexham AFC fixtures, results, Championship table, promotion projection, news and podcasts. Updated hourly.">
-<meta name="theme-color" content="#f2f4f6" media="(prefers-color-scheme: light)">
-<meta name="theme-color" content="#0d0f12" media="(prefers-color-scheme: dark)">
+<meta name="theme-color" content="#e01e2d">
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src 'self' https: data:; media-src https:; frame-src https://www.youtube-nocookie.com; style-src 'unsafe-inline'; script-src 'unsafe-inline'; connect-src 'self'; manifest-src 'self'; base-uri 'none'; form-action 'none'">
 <meta property="og:title" content="Wrexham Tracker">
 <meta property="og:description" content="Fixtures, table, chances, squad, news and podcasts for Wrexham AFC. Updated every 30 minutes.">
@@ -64,7 +63,7 @@ a{color:inherit;text-decoration:none}
 /* header */
 header{border-bottom:1px solid var(--line)}
 .band{background:linear-gradient(160deg,#e01e2d 0%,#b30d24 55%,#8d0a1e 100%);
-  color:#fff;padding:20px 0 16px}
+  color:#fff;padding:calc(20px + env(safe-area-inset-top)) 0 16px}
 .mark{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap}
 .mark h1{font-size:30px;font-weight:800;letter-spacing:-1px;line-height:1}
 .mark h1 span{color:#ffd166}
@@ -319,7 +318,7 @@ function hero(d){  // d used for nextInfo below
         ${last.home ? " &middot; Y Cae Ras" : ""}
         ${last.comp !== "League" ? `<span class="cbadge">${esc(last.comp)}</span>` : ""}</div>
       <div class="form">${(d.projection?.form || []).map(f => `<span class="pill ${f}">${f}</span>`).join("")}</div>
-      ${d.lastMatch && d.lastMatch.stats.us ? `<div class="opp" style="margin-top:10px">
+      ${d.lastMatch?.stats?.us?.possessionPct != null ? `<div class="opp" style="margin-top:10px">
         ${esc(String(d.lastMatch.stats.us.possessionPct))}% possession &middot; ${esc(String(d.lastMatch.stats.us.totalShots))} shots</div>` : ""}
       <div><a class="olink" href="#" id="tocentre">Match centre &rarr;</a></div>`;
   }
@@ -609,17 +608,17 @@ tabs();
 fetch("data.json").then(r => r.json()).then(d => {
   $("#comp").textContent = d.competition + " " + d.season;
   const lg = d.matches.filter(m => m.comp === "League");   // cups don't belong in league progress
-  const done = lg.filter(m => m.completed).length, total = lg.length;
+  const done = lg.filter(m => m.completed || m.awaitingResult).length, total = lg.length;
   $("#prog").textContent = `${done} played \u00b7 ${total - done} to go`;
-  const f = d.projection?.form || [];
+  const res = lg.filter(m => m.completed && m.result).map(m => m.result);
   let streak = "";
-  if (f.length){
-    const last = f[f.length - 1];
-    let n = 0; while (n < f.length && f[f.length - 1 - n] === last) n++;
-    const unbeaten = f.slice().reverse().findIndex(x => x === "L");
+  if (res.length){
+    const back = res.slice().reverse(), last = back[0];
+    let n = 0; while (n < back.length && back[n] === last) n++;
+    const sinceLoss = back.findIndex(x => x === "L");
     streak = last === "W" ? (n > 1 ? `${n} wins in a row` : "Won last time out")
-           : last === "L" ? (f.filter(x => x === "W").length ? "Bounce-back time" : "Still chasing a first win")
-           : unbeaten === -1 ? `Unbeaten in ${f.length}` : `Unbeaten in ${unbeaten}`;
+           : last === "L" ? (res.includes("W") ? "Bounce-back time" : "Still chasing a first win")
+           : `Unbeaten in ${sinceLoss === -1 ? res.length : sinceLoss}`;
   }
   $("#streak").textContent = streak;
   $("#sbarfill").style.width = (done / total * 100) + "%";
