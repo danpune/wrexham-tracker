@@ -34,11 +34,19 @@ jobs:
       - name: Fill official highlights (fail-safe — merge-only, ok if YouTube blocks CI)
         run: python build_highlights.py || true
 
+      # Keeps the WhatsApp/iMessage link preview showing the current result and
+      # next fixture. Fonts resolve to DejaVu here; the script only writes when
+      # the pixels change, so a quiet run commits nothing.
+      - name: Refresh the share card
+        run: |
+          python -m pip install --quiet pillow
+          python build_assets.py || true
+
       - name: Commit if changed
         run: |
           git config user.name  "wxm-bot"
           git config user.email "actions@users.noreply.github.com"
-          git add -A data.json highlights.json ics
+          git add -A data.json highlights.json ics preview.jpg
           git diff --staged --quiet || git commit -m "Update data $(date -u +%FT%TZ)"
           git pull --rebase origin main
           git push
