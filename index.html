@@ -176,6 +176,10 @@ tr.wxm td{background:rgba(224,36,47,.11);font-weight:700}
 tr.wxm td:nth-child(2){box-shadow:inset 3px 0 0 var(--red)}
 tr.line td{border-top:2px solid var(--red-dim)}
 .tkey{font-size:12px;color:var(--mut);margin-top:12px;line-height:1.7}
+.links{display:flex;flex-wrap:wrap;gap:8px;margin-top:11px}
+.links a{font-size:12px;font-weight:600;color:var(--red);border:1px solid var(--red-dim);
+  border-radius:999px;padding:7px 12px;min-height:34px;display:inline-flex;align-items:center}
+.links a:hover{background:var(--red);color:#fff;border-color:var(--red)}
 .tkey b{color:var(--tx)}
 .hide-sm{}
 .nshort{display:none}
@@ -751,13 +755,28 @@ function info(d){
     how the last game went, where they sit, and what the market and the numbers make of the season.
     No ads, no accounts, no tracking. It costs nothing to run.</div></div>
 
+  <div class="card" style="margin-top:10px"><h2>Official Wrexham channels</h2>
+    <div class="note" style="margin-top:8px">This is an independent fan-built tracker &mdash; not run by
+      or affiliated with the club. For tickets, official announcements and full match coverage, go to
+      the club directly:</div>
+    <div class="links">
+      <a href="https://www.wrexhamafc.co.uk/" target="_blank" rel="noopener noreferrer">Official website</a>
+      <a href="https://x.com/Wrexham_AFC" target="_blank" rel="noopener noreferrer">X / Twitter</a>
+      <a href="https://www.instagram.com/wrexham_afc" target="_blank" rel="noopener noreferrer">Instagram</a>
+      <a href="https://www.youtube.com/@WxmAFCofficial" target="_blank" rel="noopener noreferrer">YouTube</a>
+      <a href="https://www.facebook.com/wrexhamfootballclub" target="_blank" rel="noopener noreferrer">Facebook</a>
+      <a href="https://www.tiktok.com/@wrexham_afc" target="_blank" rel="noopener noreferrer">TikTok</a>
+      <a href="https://www.efl.com/clubs/wrexham/" target="_blank" rel="noopener noreferrer">EFL club page</a>
+    </div></div>
+
   <div class="card" style="margin-top:10px"><h2>Where the numbers come from</h2>
     <div class="note" style="margin-top:8px">
-      <b>Fixtures, table, match stats, squad, TV</b> &mdash; ESPN's public feed (league, EFL Cup, FA Cup).<br>
-      <b>News</b> &mdash; Google News RSS.<br>
+      <b>Fixtures, table, match stats, squad, TV</b> &mdash; <a href="https://www.espn.co.uk/football/team/_/id/352/wrexham" target="_blank" rel="noopener noreferrer">ESPN</a>'s public feed (league, EFL Cup, FA Cup).<br>
+      <b>News</b> &mdash; <a href="https://news.google.com/search?q=Wrexham%20AFC" target="_blank" rel="noopener noreferrer">Google News</a> RSS.<br>
       <b>Podcasts</b> &mdash; the shows' own public RSS feeds.<br>
-      <b>Odds</b> &mdash; live Polymarket markets. Kalshi lists the same fixtures but has no quotes on them.<br>
-      <b>Kickoff weather</b> &mdash; Open-Meteo, for the venue city.<br>
+      <b>Highlights</b> &mdash; official uploads only, from <a href="https://www.youtube.com/@WxmAFCofficial" target="_blank" rel="noopener noreferrer">Wrexham AFC</a>, <a href="https://www.youtube.com/@theEFL" target="_blank" rel="noopener noreferrer">the EFL</a> and <a href="https://www.youtube.com/@cbssportsgolazo" target="_blank" rel="noopener noreferrer">CBS Sports Golazo</a>, each verified before it is shown.<br>
+      <b>Odds</b> &mdash; live <a href="https://polymarket.com/" target="_blank" rel="noopener noreferrer">Polymarket</a> markets. Kalshi lists the same fixtures but has no quotes on them.<br>
+      <b>Kickoff weather</b> &mdash; <a href="https://open-meteo.com/" target="_blank" rel="noopener noreferrer">Open-Meteo</a>, for the venue city.<br>
       The refresh job is scheduled every 30 minutes, but GitHub skips slots when it is busy &mdash; in practice updates land a few times a day. The timestamp is the truth: last update <b>${esc(when)}</b> UK.</div></div>
 
   <div class="card" style="margin-top:10px"><h2>What the projection is and isn't</h2>
