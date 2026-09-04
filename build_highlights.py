@@ -73,19 +73,24 @@ ALIASES = {
 }
 
 
-def matches_title(opponent, title):
-    """A title is this fixture's only if it names Wrexham and the opponent.
+def matches_title(a, b, title):
+    """True when the title is a highlights upload naming BOTH of these clubs.
 
-    The "wrexham" guard is what kills the West Ham / West Bromwich collision --
-    both are in this division and @theEFL uploads highlights for every fixture.
+    Requiring both names is what kills the West Ham / West Bromwich collision --
+    they are both in this division and @theEFL uploads highlights for every
+    fixture, so a one-sided match would attach the wrong video.
     """
     t = title.lower()
-    if "highlight" not in t or "wrexham" not in t:
+    if "highlight" not in t:
         return False
-    alias = ALIASES.get(opponent.lower())
+    return _names(a, t) and _names(b, t)
+
+
+def _names(club, t):
+    alias = ALIASES.get(club.lower())
     if alias and re.search(rf"\b{re.escape(alias)}\b", t):
         return True
-    return all(re.search(rf"\b{re.escape(w)}\b", t) for w in key_words(opponent))
+    return all(re.search(rf"\b{re.escape(w)}\b", t) for w in key_words(club))
 
 
 def key_words(opponent):
@@ -107,8 +112,12 @@ def main():
     doc = json.load(open(path))
     hl = doc.setdefault("highlights", {})
 
+    def pair(v):
+        # entries written before the league-wide scan stored only the opponent
+        return v.get("teams") or ["Wrexham", v.get("opponent", "")]
+
     dropped = [mid for mid, v in hl.items()
-               if v.get("title") and not matches_title(v.get("opponent", ""), v["title"])]
+               if v.get("title") and not matches_title(*pair(v), v["title"])]
     for mid in dropped:
         print(f"  dropping stale/mismatched entry {mid}: {hl[mid].get('title','')[:60]}")
         del hl[mid]
@@ -123,28 +132,54 @@ def main():
         print("no channel uploads readable; leaving highlights.json untouched")
         return
 
-    # newest match first, so a fixture maps to the newest matching upload
-    done = [m for m in data["matches"] if m["completed"]][::-1]
+    # Every completed league fixture, not just Wrexham's -- @theEFL uploads
+    # highlights for the whole division, so the same scrape covers all 24 clubs.
+    # Newest first, so a fixture maps to the newest matching upload.
+    fixtures = []
+    for m in data["matches"]:
+        if m["completed"]:
+            fixtures.append((m["id"], "Wrexham", m["opponent"], m["date"]))
+    try:
+        lg = json.load(open(os.path.join(DIR, "league.json")))
+        names = {k: v["n"] for k, v in lg["teams"].items()}
+        for m in lg["matches"]:
+            if m["c"] and m["i"] not in {f[0] for f in fixtures}:
+                fixtures.append((m["i"], names.get(m["h"], ""), names.get(m["a"], ""), m["d"]))
+    except (OSError, ValueError, KeyError):
+        pass
+    fixtures.sort(key=lambda f: f[3], reverse=True)
+
     used = set()
     added = 0
-    for m in done:
-        if m["id"] in hl:
+    for mid, ha, ab, when in fixtures:
+        if mid in hl or not (ha and ab):
             continue
         for vid, title in videos:
-            if vid in used:
+            if vid in used or not matches_title(ha, ab, title) or not official(vid):
                 continue
-            if not matches_title(m["opponent"], title):
-                continue
-            if not official(vid):
-                continue
-            hl[m["id"]] = {"yt": vid, "title": title, "opponent": m["opponent"]}
+            hl[mid] = {"yt": vid, "title": title, "teams": [ha, ab]}
             used.add(vid)
             added += 1
-            print(f"  {m['date'][:10]} v {m['opponent']}: {vid}  {title[:56]}")
+            print(f"  {when[:10]} {ha} v {ab}: {vid}  {title[:52]}")
             break
 
     if added or dropped:
         json.dump(doc, open(path, "w"), indent=1)
+        # This runs after fetch_data.py, so league.json was written before these
+        # videos were known. Patch it here rather than leave the Match tab a
+        # cron behind on every new highlight.
+        lp = os.path.join(DIR, "league.json")
+        try:
+            lg = json.load(open(lp))
+            for m in lg["matches"]:
+                yt = hl.get(m["i"], {}).get("yt")
+                if yt:
+                    m["y"] = yt
+                else:
+                    m.pop("y", None)
+            json.dump(lg, open(lp, "w"), separators=(",", ":"))
+        except (OSError, ValueError, KeyError):
+            pass
     print(f"added {added}, total {len(hl)}")
 
 

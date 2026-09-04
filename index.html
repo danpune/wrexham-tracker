@@ -80,6 +80,8 @@ header{border-bottom:1px solid var(--line)}
   border-radius:8px;padding:6px 8px;font-size:12px;font-family:inherit;max-width:190px;
   min-height:32px}
 #tz option{color:#12161a;background:#fff}
+.mprow{display:grid;grid-template-columns:1fr;gap:10px}
+@media(min-width:560px){.mprow{grid-template-columns:1fr 1.4fr}}
 .mpick label{display:block;font-size:12px;font-weight:700;letter-spacing:.06em;
   text-transform:uppercase;color:var(--mut);margin-bottom:6px}
 td.own{cursor:pointer}
@@ -638,58 +640,116 @@ function standing(d){
     ${rows.includes("cut") ? `<div class="note" style="margin-top:9px;font-size:11px">Red line is the playoff cut &mdash; top 6 go up or into the playoffs.</div>` : `<div class="note" style="margin-top:9px;font-size:11px">Top 6 go up or into the playoffs.</div>`}`;
 }
 
-// archive.json holds stats/events/XIs for every finished game. Fetched once,
-// and only when someone actually picks a match other than the latest -- the
-// default view is served entirely from data.json, so first paint costs nothing.
-let ARCHIVE = null;
-let CURRENT = null;      // the match on screen, so Share exports what you're looking at
-const archive = () => (ARCHIVE ||= fetch("archive.json")
+// Every finished league game's stats live in archive/YYYY-MM.json, and every
+// league fixture in league.json. Both are fetched only when needed: the default
+// view (Wrexham's newest match) comes wholly from data.json, so first paint is
+// unchanged whether or not anyone opens this tab.
+const WXM = "352";
+const crest = id => `https://a.espncdn.com/i/teamlogos/soccer/500/${id}.png`;
+let LEAGUE = null, CURRENT = null;
+const MONTHS = {};
+const league = () => (LEAGUE ||= fetch("league.json")
+  .then(r => r.ok ? r.json() : null).catch(() => null));
+const month = ym => (MONTHS[ym] ||= fetch(`archive/${ym}.json`)
   .then(r => r.ok ? r.json() : {}).catch(() => ({})));
 
-// Same shape fetch_summary() builds for lastMatch, assembled client-side from a
-// match record plus its cached detail, so one renderer serves both.
-const payloadFor = (m, det) => ({
-  yt: m.yt || null,
-  search: "https://www.youtube.com/results?search_query="
-          + encodeURIComponent(`Wrexham ${m.opponent} highlights`),
-  match: {opponent: m.opponent, logo: m.logo, home: m.home, us: m.us,
-          them: m.them, date: m.date, comp: m.comp, result: m.result},
-  ...det,
-});
+const ytSearch = (...names) => "https://www.youtube.com/results?search_query="
+  + encodeURIComponent(names.join(" ") + " highlights");
+
+// archive details are keyed by ESPN team id; the renderer wants us/them.
+const sidesFor = (det, a, b) => det ? {
+  stats:   {us: det.stats[a]   || {}, them: det.stats[b]   || {}},
+  lineups: {us: det.lineups[a] || [], them: det.lineups[b] || []},
+  events:  (det.events || []).map(e => ({...e, us: e.t === a})),
+} : {stats: {}, events: [], lineups: {}};
 
 function centre(d){
-  const done = d.matches.filter(m => m.completed)
-                        .sort((a, b) => b.date.localeCompare(a.date));
-  if (!done.length){ $("#centre").innerHTML = "<div class='skel'>No completed match yet.</div>"; return; }
+  const wxmDone = d.matches.filter(m => m.completed)
+                           .sort((a, b) => b.date.localeCompare(a.date));
+  if (!wxmDone.length){ $("#centre").innerHTML = "<div class='skel'>No completed match yet.</div>"; return; }
 
-  const opt = m => `<option value="${esc(m.id)}">${esc(m.opponent)} `
-    + `(${m.home ? "H" : "A"}) &middot; ${esc(m.result)} ${m.us}&ndash;${m.them} `
-    + `&middot; ${esc(fmtShort(m.date.slice(0, 10)))}${m.yt ? " \u25b6" : ""}</option>`;
-
-  const withVid = done.filter(m => m.yt).length;
   $("#centre").innerHTML = `<div class="card mpick">
-      <label for="mpick">Match</label>
-      <select id="mpick">${done.map(opt).join("")}</select>
-      <p class="note" style="margin:8px 0 0">${done.length} played this season,
-        ${withVid} with highlights (&#9654;). Picking a game loads its stats, timeline and XIs.</p>
+      <div class="mprow">
+        <div><label for="tpick">Team</label>
+          <select id="tpick"><option value="${WXM}">Wrexham</option></select></div>
+        <div><label for="mpick">Match</label><select id="mpick"></select></div>
+      </div>
+      <p class="note" id="mpnote" style="margin:8px 0 0">Every club&rsquo;s season &mdash;
+        pick a team to see their results, stats and highlights.</p>
     </div>
     <div id="mcbody"></div>`;
 
-  // The newest game's detail is already in data.json -- no request for the default view.
-  renderMatch(d, d.lastMatch || payloadFor(done[0], {stats:{}, events:[], lineups:{}}));
+  // Wrexham's own list needs no network: data.json already holds it (cups too).
+  fillMatches(wxmDone.map(m => ({
+    id: m.id, label: `${m.opponent} (${m.home ? "H" : "A"}) \u00b7 ${m.result} `
+       + `${m.us}\u2013${m.them} \u00b7 ${fmtShort(m.date.slice(0, 10))}`, yt: m.yt})));
+  renderMatch(d, d.lastMatch);
 
-  $("#mpick").onchange = async e => {
-    const m = done.find(x => x.id === e.target.value);
-    if (!m) return;
-    $("#mcbody").innerHTML = "<div class='skel'>Loading match&hellip;</div>";
-    const det = (await archive())[m.id];
-    if ($("#mpick").value !== m.id) return;          // a newer pick won the race
-    renderMatch(d, payloadFor(m, det || {stats:{}, events:[], lineups:{}}));
-  };
+  league().then(lg => {
+    if (!lg) { $("#mpnote").textContent = "Other clubs' games couldn't load \u2014 Wrexham's are all here."; return; }
+    const names = Object.entries(lg.teams).sort((a, b) => a[1].n.localeCompare(b[1].n));
+    $("#tpick").innerHTML = names.map(([id, t]) =>
+      `<option value="${esc(id)}"${id === WXM ? " selected" : ""}>${esc(t.n)}</option>`).join("");
+    const played = lg.matches.filter(m => m.c);
+    $("#mpnote").innerHTML = `${played.length} of ${lg.matches.length} league games played, `
+      + `${played.filter(m => m.y).length} with highlights (&#9654;). Cup ties show for Wrexham only.`;
+
+    const listFor = id => {
+      if (id === WXM) return wxmDone.map(m => ({
+        id: m.id, label: `${m.opponent} (${m.home ? "H" : "A"}) \u00b7 ${m.result} `
+           + `${m.us}\u2013${m.them} \u00b7 ${fmtShort(m.date.slice(0, 10))}`, yt: m.yt}));
+      return played.filter(m => m.h === id || m.a === id)
+        .sort((a, b) => b.d.localeCompare(a.d))
+        .map(m => {
+          const home = m.h === id, us = home ? m.hs : m.as, them = home ? m.as : m.hs;
+          const opp = lg.teams[home ? m.a : m.h];
+          return {id: m.i, label: `${opp ? opp.s : "?"} (${home ? "H" : "A"}) \u00b7 `
+            + `${us > them ? "W" : us < them ? "L" : "D"} ${us}\u2013${them} \u00b7 `
+            + `${fmtShort(m.d.slice(0, 10))}`, yt: m.y};
+        });
+    };
+
+    const show = async () => {
+      const team = $("#tpick").value, id = $("#mpick").value;
+      $("#mcbody").innerHTML = "<div class='skel'>Loading match&hellip;</div>";
+      if (team === WXM && d.lastMatch && id === wxmDone[0].id) return renderMatch(d, d.lastMatch);
+      const m = lg.matches.find(x => x.i === id)
+             || d.matches.find(x => x.id === id);            // a Wrexham cup tie
+      if (!m) return;
+      const iso = m.d || m.date, ym = iso.slice(0, 7);
+      const det = (await month(ym))[id] || null;
+      if ($("#mpick").value !== id) return;                  // a newer pick won the race
+      const home = m.h ? m.h === team : m.home;
+      const oppId = m.h ? (home ? m.a : m.h) : null;
+      const us = m.h ? (home ? m.hs : m.as) : m.us;
+      const them = m.h ? (home ? m.as : m.hs) : m.them;
+      const oppName = oppId ? (lg.teams[oppId] || {}).n : m.opponent;
+      const ourName = (lg.teams[team] || {}).n || "Wrexham";
+      renderMatch(d, {
+        yt: (m.y || m.yt) || null,
+        search: ytSearch(ourName, oppName),
+        match: {opponent: oppName, logo: oppId ? crest(oppId) : m.logo,
+                ourLogo: crest(team), ourName,
+                home, us, them, date: iso, comp: m.comp || "League",
+                result: us > them ? "W" : us < them ? "L" : "D"},
+        ...sidesFor(det, team, oppId || ""),
+      });
+    };
+
+    $("#tpick").onchange = () => { fillMatches(listFor($("#tpick").value)); show(); };
+    $("#mpick").onchange = show;
+  });
+}
+
+function fillMatches(list){
+  $("#mpick").innerHTML = list.map(o =>
+    `<option value="${esc(o.id)}">${esc(o.label)}${o.yt ? " \u25b6" : ""}</option>`).join("");
 }
 
 function renderMatch(d, L){
   const m = L.match, us = (L.stats || {}).us || {}, them = (L.stats || {}).them || {};
+  const ourName = m.ourName || "Wrexham";
+  const ourLogo = m.ourLogo || (d.table.find(r => r.isWrexham) || {}).logo || "";
   const n = v => parseFloat(v) || 0;
 
   const bar = (label, a, b) => {
@@ -704,10 +764,10 @@ function renderMatch(d, L){
       ${e.kind === "goal" || e.kind === "own" || e.kind === "pen" ? "&#9917;"
         : e.kind === "red" ? "&#128308;" : "&#129000;"}
       ${esc(e.who || "")}${e.kind === "own" ? " <em>(OG)</em>" : e.kind === "pen" ? " <em>(pen)</em>" : ""}
-      <em>${e.us ? "Wrexham" : esc(m.opponent)}</em></div>`).join("")}</div>` : "";
+      <em>${e.us ? esc(ourName) : esc(m.opponent)}</em></div>`).join("")}</div>` : "";
 
-  const xis = (L.lineups || {});
-  const xi = side => `<div><h4>${side === "us" ? "Wrexham" : esc(m.opponent)}</h4><ol>${
+  const xis = L.lineups || {};
+  const xi = side => `<div><h4>${side === "us" ? esc(ourName) : esc(m.opponent)}</h4><ol>${
     (xis[side] || []).map(p => `<li><i>${esc(p.pos)}</i>${esc(p.name)}</li>`).join("")}</ol></div>`;
 
   const video = L.yt
@@ -719,7 +779,7 @@ function renderMatch(d, L){
   $("#mcbody").innerHTML = `<div class="card">
     <div class="meta"><span class="src">${esc(m.comp)}</span><span>${ukFull(new Date(m.date))}</span></div>
     <div class="mc-head">
-      <div class="mc-side"><img class="crest lg" src="${esc((d.table.find(r => r.isWrexham) || {}).logo || "")}" alt="" loading="lazy"><span>Wrexham</span></div>
+      <div class="mc-side"><img class="crest lg" src="${esc(ourLogo)}" alt="" loading="lazy"><span>${esc(ourName)}</span></div>
       <div class="mc-score" style="color:var(--${m.result === "W" ? "w" : m.result === "L" ? "l" : "d"})">
         ${m.us}&ndash;${m.them}</div>
       <div class="mc-side"><img class="crest lg" src="${esc(m.logo)}" alt="" loading="lazy"><span>${esc(m.opponent)}</span></div>
@@ -733,10 +793,11 @@ function renderMatch(d, L){
       ${bar("Fouls", us.foulsCommitted, them.foulsCommitted)}
     </div>`}
     ${video}
-    <div><button class="olink" id="sharebtn" style="background:none;border:0;cursor:pointer;font-family:inherit;padding:0">
-      &#8599; Share this result</button></div>
+    ${m.ourName && m.ourName !== "Wrexham" ? "" : `<div><button class="olink" id="sharebtn" style="background:none;border:0;cursor:pointer;font-family:inherit;padding:0">
+      &#8599; Share this result</button></div>`}
   </div>
-  ${(xis.us || xis.them) ? `<div class="card"><h2>Starting XI</h2><div class="xi">${xi("us")}${xi("them")}</div></div>` : ""}`;
+  ${(xis.us || {}).length || (xis.them || {}).length
+    ? `<div class="card"><h2>Starting XI</h2><div class="xi">${xi("us")}${xi("them")}</div></div>` : ""}`;
   CURRENT = L;
 }
 

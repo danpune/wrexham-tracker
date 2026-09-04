@@ -59,3 +59,26 @@ def test_strip_html():
 if __name__ == "__main__":
     test_rfc822(); test_projection(); test_safe_url(); test_strip_html()
     print("ok")
+
+
+def test_matches_title():
+    """Both clubs must be named. The division has West Ham AND West Bromwich,
+    and Sheffield United AND Sheffield Wednesday, so a one-sided match is wrong."""
+    import build_highlights as h
+    ok = h.matches_title
+    assert ok("Wrexham", "Millwall", "HIGHLIGHTS | Wrexham AFC vs Millwall")
+    assert ok("Millwall", "Wrexham", "HIGHLIGHTS | Wrexham AFC vs Millwall")
+    assert ok("Wrexham", "Queens Park Rangers", "QPR 1-2 Wrexham | Highlights")
+    assert ok("Wolverhampton Wanderers", "Stoke City", "Wolves v Stoke City | Highlights")
+    assert ok("West Bromwich Albion", "Burnley", "West Brom 2-0 Burnley highlights")
+    # not a highlights upload
+    assert not ok("Wrexham", "Millwall", "Wrexham AFC vs Millwall | Full match")
+    # only one club named
+    assert not ok("Wrexham", "Millwall", "HIGHLIGHTS | Wrexham AFC vs Watford")
+    # the collisions
+    assert not ok("West Ham United", "Burnley", "West Bromwich Albion v Burnley | Highlights")
+    assert not ok("West Bromwich Albion", "Burnley", "West Ham United v Burnley | Highlights")
+    assert not ok("Sheffield United", "Derby County", "Sheffield Wednesday v Derby | Highlights")
+    assert not ok("Sheffield Wednesday", "Derby County", "Sheffield United v Derby | Highlights")
+    # 'ham' inside Birmingham must not satisfy West Ham
+    assert not ok("West Ham United", "Watford", "Birmingham City v Watford | Highlights")

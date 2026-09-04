@@ -70,10 +70,14 @@ def rfc822(s):
 # --- fixtures & results -------------------------------------------------------
 # ESPN's team/schedule endpoint only returns matches already played, so walk the
 # league scoreboard month by month and filter. 11 requests, cheap, complete.
-def fetch_matches(league_form=None):
+def fetch_matches(league_form=None, league_all=None):
     """league_form, if given, is filled with {team_id: [results]} for every club
     from the same scoreboard responses — the table's Form column costs no extra
-    requests because these pages are already being fetched."""
+    requests because these pages are already being fetched.
+
+    league_all, likewise, collects every league fixture for every club. These
+    responses already contain all 552 of them; we were throwing away the ~95%
+    that Wrexham are not playing in."""
     out = []
     for league, comp_name in COMPETITIONS:
       for year, month in SEASON_MONTHS:
@@ -103,6 +107,25 @@ def fetch_matches(league_form=None):
                             "o": them["team"].get("shortDisplayName") or them["team"]["displayName"],
                             "h": me.get("homeAway") == "home",
                         })
+            if league_all is not None and league == LEAGUE and len(teams) == 2:
+                st = comp.get("status", {}).get("type", {})
+                home = next((t for t in teams if t.get("homeAway") == "home"), teams[0])
+                away = next((t for t in teams if t is not home), teams[1])
+                for t in (home, away):
+                    league_all["teams"].setdefault(t["team"]["id"], {
+                        "n": t["team"]["displayName"],
+                        "s": t["team"].get("shortDisplayName") or t["team"]["displayName"],
+                        "a": t["team"].get("abbreviation", ""),
+                    })
+                sc = lambda t: (int(t["score"]) if st.get("completed")
+                                and str(t.get("score", "")).isdigit() else None)
+                league_all["matches"].append({
+                    "i": ev["id"], "d": iso(ev["date"]),
+                    "h": home["team"]["id"], "a": away["team"]["id"],
+                    "hs": sc(home), "as": sc(away),
+                    "c": bool(st.get("completed")),
+                    "v": comp.get("venue", {}).get("fullName", ""),
+                })
             if not any(t["team"]["id"] == TEAM_ID for t in teams):
                 continue
             us = next(t for t in teams if t["team"]["id"] == TEAM_ID)
@@ -355,7 +378,12 @@ KEEP_STATS = ["possessionPct", "totalShots", "shotsOnTarget", "wonCorners",
 def match_detail(m):
     """stats / goal-and-card timeline / XIs for one finished match.
 
-    None when ESPN will not answer, so a blip never overwrites a good cache."""
+    Keyed by ESPN team id rather than us/them: this now runs for games Wrexham
+    are not in, where "us" has no meaning and both sides would collapse onto
+    the same key. fetch_summary() translates back for the match-centre payload.
+
+    None when ESPN will not answer, so a blip never overwrites a good cache.
+    """
     try:
         d = get(f"https://site.api.espn.com/apis/site/v2/sports/soccer/{m['league']}"
                 f"/summary?event={m['id']}", as_json=True)
@@ -364,37 +392,47 @@ def match_detail(m):
 
     stats = {}
     for t in d.get("boxscore", {}).get("teams", []):
-        side = "us" if t["team"]["id"] == TEAM_ID else "them"
-        stats[side] = {x["name"]: x.get("displayValue")
-                       for x in t.get("statistics", []) if x["name"] in KEEP_STATS}
+        stats[t["team"]["id"]] = {x["name"]: x.get("displayValue")
+                                  for x in t.get("statistics", []) if x["name"] in KEEP_STATS}
+
+    sides = list(stats) or [r.get("team", {}).get("id") for r in d.get("rosters", [])]
 
     goals = []
     for k in d.get("keyEvents", []):
         kind = (k.get("type") or {}).get("text", "")
         if not k.get("scoringPlay") and "Card" not in kind:
             continue
-        who = (k.get("participants") or [{}])[0].get("athlete", {}).get("displayName", "")
+        credited = (k.get("team") or {}).get("id")
+        # ESPN credits an own goal to the team that benefits; the player is on
+        # the other side, so flip it to keep scorer and XI consistent.
+        if "Own Goal" in kind:
+            credited = next((t for t in sides if t != credited), credited)
         goals.append({
             "clock": (k.get("clock") or {}).get("displayValue", ""),
             "kind": "own" if "Own Goal" in kind else
                     "pen" if "Penalty" in kind and k.get("scoringPlay") else
                     "goal" if k.get("scoringPlay") else
                     "red" if "Red" in kind else "yellow",
-            "who": who,
-            # ESPN credits an own goal to the team that benefits; the player is
-            # on the other side, so flip it to keep scorer and XI consistent.
-            "us": ((k.get("team") or {}).get("id") == TEAM_ID) != ("Own Goal" in kind),
+            "who": (k.get("participants") or [{}])[0].get("athlete", {}).get("displayName", ""),
+            "t": credited,
         })
 
     lineups = {}
     for r in d.get("rosters", []):
-        side = "us" if r.get("team", {}).get("id") == TEAM_ID else "them"
-        lineups[side] = [
+        lineups[r.get("team", {}).get("id")] = [
             {"name": p.get("athlete", {}).get("displayName", ""),
              "pos": (p.get("position") or {}).get("abbreviation", "")}
             for p in r.get("roster", []) if p.get("starter")]
 
     return {"stats": stats, "events": goals, "lineups": lineups}
+
+
+def as_sides(det, our_id):
+    """Re-key a match_detail onto us/them for the match-centre renderer."""
+    other = next((t for t in det["stats"] if t != our_id), None)
+    side = lambda d: {"us": d.get(our_id, {}), "them": d.get(other, {})}
+    return {"stats": side(det["stats"]), "lineups": side(det["lineups"]),
+            "events": [dict(e, us=e["t"] == our_id) for e in det["events"]]}
 
 
 def fetch_summary(matches):
@@ -406,6 +444,7 @@ def fetch_summary(matches):
     det = match_detail(m)
     if det is None:
         return None
+    det = as_sides(det, TEAM_ID)
 
     hl = {}
     try:                                  # optional, curated, merge-only
@@ -423,30 +462,54 @@ def fetch_summary(matches):
             **det}
 
 
-def build_archive(matches):
-    """archive.json: {event id -> stats/events/lineups} for every finished game.
+# A finished match's summary never changes, so each is fetched exactly once and
+# kept forever. Split by month: the whole league is ~552 games a season and the
+# page should not download all of them to show one. Backfill is capped per run
+# so a cold start spreads over several crons instead of blowing the CI timeout.
+MAX_NEW_SUMMARIES = 40    # DIR is defined further down; resolve the path at call time
 
-    A finished match's summary never changes, so each game is fetched exactly
-    once, ever -- the file is a cache, not a rebuild. Kept out of data.json so
-    the season's worth of detail costs nothing on first paint.
+
+def build_archive(matches, league_all):
+    """archive/YYYY-MM.json: {event id -> stats/events/lineups}.
+
+    Covers every completed league match, not just Wrexham's, plus Wrexham's cup
+    ties. Returns (cached, added, outstanding) so the run log shows backfill
+    progress.
     """
-    path = os.path.join(DIR, "archive.json")
-    try:
-        with open(path) as f:
-            arch = json.load(f)
-    except (OSError, ValueError):
-        arch = {}
+    adir = os.path.join(DIR, "archive")
+    os.makedirs(adir, exist_ok=True)
+    want = {}                                   # event id -> (month, league)
+    for m in matches:                           # Wrexham, incl. cup competitions
+        if m["completed"] and not m.get("awaitingResult"):
+            want[m["id"]] = (m["date"][:7], m["league"])
+    for m in league_all["matches"]:             # every other club's league games
+        if m["c"]:
+            want.setdefault(m["i"], (m["d"][:7], LEAGUE))
+
+    months = {}
+    for month in sorted({mo for mo, _ in want.values()}):
+        path = os.path.join(adir, month + ".json")
+        try:
+            with open(path) as f:
+                months[month] = json.load(f)
+        except (OSError, ValueError):
+            months[month] = {}
+
+    todo = [(i, mo, lg) for i, (mo, lg) in want.items() if i not in months.get(mo, {})]
+    todo.sort(key=lambda t: t[1], reverse=True)   # newest months first
     added = 0
-    for m in matches:
-        if (not m["completed"]) or m.get("awaitingResult") or m["id"] in arch:
-            continue
-        det = match_detail(m)
-        if det:                           # a failed fetch retries next run
-            arch[m["id"]] = det
+    for eid, month, lg in todo[:MAX_NEW_SUMMARIES]:
+        det = match_detail({"id": eid, "league": lg})
+        if det:                                 # a failed fetch retries next run
+            months[month][eid] = det
             added += 1
-    with open(path, "w") as f:
-        json.dump(arch, f, separators=(",", ":"), sort_keys=True)
-    return len(arch), added
+        time.sleep(0.3)
+
+    if added:
+        for month, blob in months.items():
+            with open(os.path.join(adir, month + ".json"), "w") as f:
+                json.dump(blob, f, separators=(",", ":"), sort_keys=True)
+    return sum(len(b) for b in months.values()), added, max(0, len(todo) - added)
 
 
 # WMO weather codes -> a short label. Open-Meteo is free and needs no key.
@@ -627,7 +690,8 @@ def main():
         previous = {}
 
     league_form = {}
-    matches = fetch_matches(league_form)
+    league_all = {"teams": {}, "matches": []}
+    matches = fetch_matches(league_form, league_all)
     league = sum(1 for m in matches if m["comp"] == "League")
     if league < TOTAL_GAMES:
         # Failing here is the safe outcome: CI makes no commit and the last good
@@ -650,12 +714,23 @@ def main():
         "squad": fetch_squad(),
     }
     write_ics(matches)
-    kept, added = build_archive(matches)
+    league_all["matches"].sort(key=lambda m: m["d"])
+    try:                       # attach any verified highlight ids we already hold
+        with open(os.path.join(DIR, "highlights.json")) as f:
+            hl = json.load(f).get("highlights", {})
+        for m in league_all["matches"]:
+            if hl.get(m["i"], {}).get("yt"):
+                m["y"] = hl[m["i"]]["yt"]
+    except (OSError, ValueError):
+        pass
+    with open(os.path.join(DIR, "league.json"), "w") as f:
+        json.dump(league_all, f, separators=(",", ":"))
+    kept, added, left = build_archive(matches, league_all)
     with open(os.path.join(DIR, "data.json"), "w") as f:
         json.dump(data, f, separators=(",", ":"))
     print(f"matches={len(matches)} (league={sum(1 for m in matches if m['comp']=='League')}) table={len(table)} news={len(data['news'])} "
           f"pods={len(data['podcasts'])} odds={len(data['odds'])} squad={len(data['squad'])} "
-          f"archive={kept} (+{added})")
+          f"league={len(league_all['matches'])} archive={kept} (+{added}, {left} to go)")
 
 
 if __name__ == "__main__":
