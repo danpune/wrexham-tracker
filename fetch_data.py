@@ -138,7 +138,9 @@ def fetch_table():
     rows = []
     for e in entries:
         s = {x["name"]: x for x in e["stats"]}
-        val = lambda k: int(float(s[k]["value"])) if k in s else 0
+        # ESPN emits {"value": null} on some stats; float(None) would kill the run
+        val = lambda k: (int(float(s[k]["value"]))
+                         if k in s and s[k].get("value") is not None else 0)
         rows.append({
             "rank": val("rank"),
             "team": e["team"]["displayName"],

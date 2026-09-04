@@ -116,7 +116,7 @@ header{border-bottom:1px solid var(--line)}
 .cdtag{display:inline-block;font-size:10px;font-weight:800;letter-spacing:.7px;
   text-transform:uppercase;color:#fff;background:var(--red);border-radius:999px;
   padding:3px 9px;vertical-align:3px;margin-left:2px}
-.cdtag.tmr{background:var(--mut)}
+.cdtag.tmr{background:var(--pill-d)}
 .next-when{color:var(--red);font-size:13px;font-weight:600;margin-top:5px}
 
 /* form pills */
@@ -170,8 +170,11 @@ tr.line td{border-top:2px solid var(--red-dim)}
 .tkey b{color:var(--tx)}
 .hide-sm{}
 .nshort{display:none}
+.nabbr{display:none}
 @media(max-width:520px){.hide-sm{display:none}}
 @media(max-width:430px){.nfull{display:none}.nshort{display:inline}.mdate{width:44px;flex:0 0 44px}}
+/* below 360px even the short name collides (West Ham / West Bromwich) — use the abbreviation */
+@media(max-width:360px){.nshort{display:none}.nabbr{display:inline}.mopp i{display:none}}
 
 /* promotion */
 .big{font-size:38px;font-weight:800;letter-spacing:-1.5px;line-height:1.1}
@@ -204,7 +207,8 @@ footer img{vertical-align:middle;margin-top:5px;min-height:20px}
 .crest.lg{width:34px;height:34px;flex:0 0 34px}
 .cbadge{font-size:9px;font-weight:800;letter-spacing:.5px;text-transform:uppercase;
   color:var(--cup-tx);border:1px solid var(--cup-line);background:var(--cup-bg);border-radius:4px;padding:2px 5px}
-.cal{display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:700;
+.cal{display:inline-flex;align-items:center;justify-content:center;gap:4px;
+  min-height:40px;font-size:11px;font-weight:700;
   color:var(--red);border:1px solid var(--red-dim);background:var(--panel);
   border-radius:999px;padding:4px 9px;text-decoration:none;white-space:nowrap}
 .cal:hover{background:var(--red);color:#fff;border-color:var(--red)}
@@ -367,6 +371,17 @@ const localDay  = d => d.toLocaleDateString("en-GB", {timeZone: TZ, weekday:"sho
 const dayKey    = (d, tz) => d.toLocaleDateString("en-CA", {timeZone: tz});
 // true when the chosen zone is on a different calendar day to the UK kickoff
 const spansDay  = d => dayKey(d, TZ) !== dayKey(d, "Europe/London");
+// short tag for the picked zone, so a row never shows two unlabelled clocks
+const tzShort = () => {
+  const city = TZ.split("/").pop().replace(/_/g, " ");
+  try {
+    const n = new Intl.DateTimeFormat("en-US", {timeZone: TZ, timeZoneName: "short"})
+      .formatToParts(new Date()).find(p => p.type === "timeZoneName").value;
+    // en-US gives "CDT" for Chicago but "GMT+5:30" for Kolkata — prefer the city
+    // name over a raw offset, which tells a reader nothing.
+    return /^GMT/.test(n) ? city : n;
+  } catch (e) { return city; }
+};
 
 function ago(iso){
   const m = (Date.now() - new Date(iso)) / 6e4;
@@ -420,6 +435,8 @@ function hero(d){  // d used for nextInfo below
       ${d.lastMatch?.stats?.us?.possessionPct != null ? `<div class="opp" style="margin-top:10px">
         ${esc(String(d.lastMatch.stats.us.possessionPct))}% possession &middot; ${esc(String(d.lastMatch.stats.us.totalShots))} shots</div>` : ""}
       <div><a class="olink" href="#" id="tocentre">Match centre &rarr;</a></div>`;
+    const tc = $("#tocentre");                       // rebound: hero() re-renders this node
+    if (tc) tc.onclick = e => { e.preventDefault(); $('.tab[data-p="centre"]').click(); };
   }
   const next = nextMatch(d);
   if (!next){ $("#next").innerHTML = "<h2>Next match</h2><div class='opp'>Season complete</div>"; return; }
@@ -433,7 +450,7 @@ function hero(d){  // d used for nextInfo below
     <div class="opp"><img class="crest" src="${esc(next.logo)}" alt="" loading="lazy"> ${next.home ? "vs" : "at"} <b>${esc(next.opponent)}</b>
       ${next.comp !== "League" ? `<span class="cbadge">${esc(next.comp)}</span>` : ""}</div>
     <div class="next-when">${when}${differs ? ` &middot; ${mine}${spansDay(dt) ? " " + esc(localDay(dt).split(" ")[0]) : ""} ${esc(tzName)}` : ""}
-      ${(() => { const k = x => x.toLocaleDateString("en-CA", UK), now = new Date(),
+      ${(() => { const k = x => x.toLocaleDateString("en-CA", {timeZone: TZ}), now = new Date(),
                  tmr = new Date(now.getTime() + 864e5);
                  return k(dt) === k(now) ? `<span class="cdtag">Today</span>`
                       : k(dt) === k(tmr) ? `<span class="cdtag tmr">Tomorrow</span>` : ""; })()}</div>
@@ -442,19 +459,20 @@ function hero(d){  // d used for nextInfo below
     ${d.nextInfo && d.nextInfo.h2h ? `<div class="opp" style="font-size:12px">${esc(d.nextInfo.h2h)}</div>` : ""}
     <div>${next.awaitingResult ? "" : `<a class="olink" href="ics/${esc(next.id)}.ics">&#128197; Add to calendar</a>`}
       <a class="olink" style="margin-left:22px" href="ics/wrexham.ics">Subscribe to all fixtures</a></div>`;
-  let iv, settled = false;
+  clearTimeout(window.__cdiv); window.__cdiv = null;   // hero() can run again (tz change)
+  let settled = false;
   // Precision follows how close it is: minutes are noise two days out, and the
   // card should feel different on match day than it does midweek.
   const seg = (n, unit) => `<span><b>${n}</b><i>${unit}</i></span>`;
   const ukDayKey = x => x.toLocaleDateString("en-CA", UK);
   const tick = () => {
     const el = $("#cd");
-    if (next.awaitingResult){ el.className = "count"; el.innerHTML = seg("FT", "full time"); settled = true; return clearInterval(iv); }
+    if (next.awaitingResult){ el.className = "count"; el.innerHTML = seg("FT", "full time"); settled = true; return; }
     const s = (dt - Date.now()) / 1000;
     if (s <= 0){
       el.className = "count live";
       el.innerHTML = `<span><b>LIVE</b><i>kicked off</i></span>`;
-      settled = true; return clearInterval(iv);
+      settled = true; return;
     }
     const dd = Math.floor(s/86400), hh = Math.floor(s%86400/3600),
           mm = Math.floor(s%3600/60), ss = Math.floor(s%60);
@@ -466,12 +484,14 @@ function hero(d){  // d used for nextInfo below
   };
   tick();
   // Only tick per-second once the seconds are actually on screen.
-  // On the first tick `iv` is still undefined, so clearInterval() inside tick
-  // cannot stop a timer that has not started yet — starting one anyway left a
-  // 1s timer running forever from kick-off onward.
-  const away = dt - Date.now();
-  if (!settled)
-    iv = window.__cdiv = setInterval(tick, away > 864e5 ? 60000 : away > 36e5 ? 30000 : 1000);
+  // Self-rescheduling: a fixed interval picked its period once, so a page left
+  // open crossed into the mins+secs display still ticking every 30 or 60s.
+  const schedule = () => {
+    const away = dt - Date.now();
+    window.__cdiv = setTimeout(() => { tick(); if (!settled) schedule(); },
+                               away > 864e5 ? 60000 : away > 36e5 ? 30000 : 1000);
+  };
+  if (!settled) schedule();
 }
 
 function fixtures(d){
@@ -485,11 +505,11 @@ function fixtures(d){
       : m.awaitingResult ? `<div class="mtag" style="color:var(--mut)">Full time</div>`
       : isNext ? `<div class="mtag">Next</div>`
       : `<div class="mtime">${ukTime(dt)}
-           ${TZ !== "Europe/London" ? `<span class="mlocal">${localTime(dt)}${spansDay(dt) ? " " + esc(localDay(dt).split(" ")[0]) : ""}</span>` : ""}</div>`;
+           ${TZ !== "Europe/London" ? `<span class="mlocal">${localTime(dt)}${spansDay(dt) ? " " + esc(localDay(dt).split(" ")[0]) : ""} ${esc(tzShort())}</span>` : ""}</div>`;
     html += `<div class="mrow${isNext ? " is-next" : ""}">
       <div class="mdate"><b>${ukDayNo(dt)}</b>${ukDay(dt)}</div>
       <img class="crest" src="${esc(m.logo)}" alt="" loading="lazy">
-      <div class="mopp"><span class="nm"><span class="nfull">${esc(m.opponent)}</span><span class="nshort">${esc(m.opponentShort || m.opponent)}</span></span><i>${m.home ? "(H)" : "(A)"}</i>
+      <div class="mopp"><span class="nm"><span class="nfull">${esc(m.opponent)}</span><span class="nshort">${esc(m.opponentShort || m.opponent)}</span><span class="nabbr">${esc(m.opponentAbbr || m.opponentShort || m.opponent)}</span></span><i>${m.home ? "(H)" : "(A)"}</i>
         ${m.comp !== "League" ? `<span class="cbadge">${esc(m.comp)}</span>` : ""}</div>
       ${right}
       ${m.completed
@@ -546,14 +566,17 @@ function standing(d){
   const el = $("#stand"); if (!el) return;
   const i = d.table.findIndex(r => r.isWrexham);
   if (i < 0){ el.innerHTML = ""; return; }
-  const from = Math.max(0, Math.min(i - 2, d.table.length - 5));
+  // Keep the playoff cut in view when they are near it, so the caption below
+  // always refers to a line that is actually drawn.
+  let from = Math.max(0, Math.min(i - 2, d.table.length - 5));
+  if (i >= 4 && i <= 9) from = Math.max(0, Math.min(4, d.table.length - 5));
   const rows = d.table.slice(from, from + 5).map(r => `
     <tr class="${r.isWrexham ? "me" : ""}${r.rank === 7 ? " cut" : ""}">
       <td>${r.rank}</td>
       <td><img class="crest" style="width:16px;height:16px;flex:none;vertical-align:-3px;margin-right:6px" src="${esc(r.logo)}" alt="" loading="lazy">${esc(r.abbr || r.team)}</td>
       <td>${r.points}</td></tr>`).join("");
   el.innerHTML = `<h2>Where they stand</h2><table class="mini"><tbody>${rows}</tbody></table>
-    <div class="note" style="margin-top:9px;font-size:11px">Red line is the playoff cut &mdash; top 6 go up or into the playoffs.</div>`;
+    ${rows.includes("cut") ? `<div class="note" style="margin-top:9px;font-size:11px">Red line is the playoff cut &mdash; top 6 go up or into the playoffs.</div>` : `<div class="note" style="margin-top:9px;font-size:11px">Top 6 go up or into the playoffs.</div>`}`;
 }
 
 function centre(d){
@@ -730,7 +753,8 @@ function info(d){
   <div class="card" style="margin-top:10px"><h2>Privacy</h2>
     <div class="note" style="margin-top:8px">No cookies, no accounts, no cross-site tracking, no ad
     networks. The only counter is a hits.sh badge in the footer, which is an aggregate page-view
-    number and nothing else. Crest images, podcast audio and any highlights video load from their
+    number and nothing else. The only thing stored on your device is the timezone you pick,
+    so the site remembers it next visit. Crest images, podcast audio and any highlights video load from their
     own hosts when you view them.</div></div>
 
   <div class="card" style="margin-top:10px"><h2>Open source</h2>
@@ -775,7 +799,7 @@ fetch("data.json").then(r => r.json()).then(d => {
   $("#sbarfill").style.width = (done / total * 100) + "%";
   // One failing panel must not blank the other seven.
   for (const [name, fn] of [["hero",hero],["fixtures",fixtures],["table",table],["centre",centre],
-                            ["promo",promo],["standing",standing],["squad",squad],["news",news],["pods",pods]]){
+                            ["promo",promo],["stand",standing],["squad",squad],["news",news],["pods",pods]]){
     try { fn(d); }
     catch (err) {
       console.error(name + " failed", err);
@@ -785,8 +809,6 @@ fetch("data.json").then(r => r.json()).then(d => {
   }
   info(d);
   initTZ(d);
-  const tc = $("#tocentre");
-  if (tc) tc.onclick = e => { e.preventDefault(); document.querySelector('.tab[data-p="centre"]').click(); };
   const sb = $("#sharebtn"); if (sb) sb.onclick = () => shareResult(d);
   $("#stamp").textContent = "Updated " + ago(d.updated);
 }).catch(() => { $("#fixtures").innerHTML = "<div class='skel'>Couldn&rsquo;t load data. Try a refresh.</div>"; });
