@@ -162,6 +162,36 @@ def fetch_table():
 
 
 # --- news ---------------------------------------------------------------------
+# Google News is inconsistent about publisher names: the same outlet arrives as
+# "BBC" and "bbc.co.uk", "Sky Sports" and "theguardian.com". Normalise so the
+# feed does not look like two different sources.
+SOURCE_NAMES = {
+    "bbc.co.uk": "BBC", "bbc.com": "BBC", "skysports.com": "Sky Sports",
+    "theguardian.com": "The Guardian", "walesonline.co.uk": "WalesOnline",
+    "oddschecker.com": "Oddschecker", "hitc.com": "HITC",
+    "aljazeera.com": "Al Jazeera", "mirror.co.uk": "Daily Mirror",
+    "independent.co.uk": "The Independent", "telegraph.co.uk": "The Telegraph",
+    "espn.com": "ESPN", "espn.co.uk": "ESPN", "si.com": "Sports Illustrated",
+    "leaderlive.co.uk": "The Leader", "dailypost.co.uk": "Daily Post",
+    "thestar.co.uk": "The Star", "thesun.co.uk": "The Sun",
+    "football.london": "Football London", "nytimes.com": "The New York Times",
+}
+
+
+def clean_source(name):
+    n = (name or "").strip()
+    key = n.lower().removeprefix("www.")
+    if key in SOURCE_NAMES:
+        return SOURCE_NAMES[key]
+    if "." in n and " " not in n:            # an unmapped bare domain
+        root = key.split(".")[0]
+        return root.upper() if len(root) <= 4 else root.capitalize()
+    return n
+
+
+MAX_PER_SOURCE = 3
+
+
 def fetch_news(limit=40):
     try:
         root = ET.fromstring(get(NEWS_FEED))
@@ -177,12 +207,23 @@ def fetch_news(limit=40):
         items.append({
             "title": title.strip(),
             "url": safe_url(it.findtext("link")),
-            "source": source.strip() or (it.findtext("source") or "").strip(),
+            "source": clean_source(source or it.findtext("source")),
             "published": rfc822(it.findtext("pubDate") or ""),
         })
     items = [i for i in items if i["published"] and i["url"]]
     items.sort(key=lambda i: i["published"], reverse=True)
-    return items[:limit]
+    # One outlet covering the opponent's town shouldn't take an eighth of the
+    # feed; cap each source so the list stays varied.
+    seen, out = {}, []
+    for i in items:
+        k = i["source"].lower()
+        if seen.get(k, 0) >= MAX_PER_SOURCE:
+            continue
+        seen[k] = seen.get(k, 0) + 1
+        out.append(i)
+        if len(out) >= limit:
+            break
+    return out
 
 
 # --- podcasts -----------------------------------------------------------------
