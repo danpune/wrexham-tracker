@@ -82,3 +82,31 @@ def test_matches_title():
     assert not ok("Sheffield Wednesday", "Derby County", "Sheffield United v Derby | Highlights")
     # 'ham' inside Birmingham must not satisfy West Ham
     assert not ok("West Ham United", "Watford", "Birmingham City v Watford | Highlights")
+
+
+def test_age_days():
+    """YouTube's coarse 'N units ago' text is the only date signal on a search
+    result, and it is what separates this season's fixture from the reverse one."""
+    import build_highlights as h
+    assert h.age_days("2 weeks ago") == 14
+    assert h.age_days("10 months ago") == 300
+    assert h.age_days("1 year ago") == 365
+    assert h.age_days("3 days ago") == 3
+    assert h.age_days("Streamed 2 days ago") == 2
+    assert h.age_days("") is None
+    assert h.age_days(None) is None
+    # the guard the search pass applies: |video age - match age| <= 35
+    match_age = 18                       # Cardiff (A), 17 Aug, read on 4 Sep
+    assert abs(h.age_days("2 weeks ago") - match_age) <= 35      # correct clip
+    assert abs(h.age_days("10 months ago") - match_age) > 35     # last season's
+    assert abs(h.age_days("2 years ago") - match_age) > 35
+
+
+def test_rejects_bts_reels():
+    """Clubs post behind-the-scenes reels titled '... Alt Highlights'. Not the match."""
+    import build_highlights as h
+    assert not h.matches_title("Blackburn Rovers", "Queens Park Rangers",
+                               "ROVING CAM: Blackburn Rovers v QPR BTS & Alt Highlights")
+    assert not h.matches_title("Millwall", "Wrexham", "TUNNEL CAM | Millwall v Wrexham highlights")
+    assert h.matches_title("Blackburn Rovers", "Queens Park Rangers",
+                           "Blackburn Rovers 1-2 QPR | Extended Highlights")
