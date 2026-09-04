@@ -73,6 +73,14 @@ header{border-bottom:1px solid var(--line)}
 .bandgrid .right{flex:1 1 auto;min-width:220px;max-width:420px}
 .badge{font-size:10.5px;font-weight:800;letter-spacing:.6px;text-transform:uppercase;
   color:#fff;border:1px solid rgba(255,255,255,.45);border-radius:999px;padding:3px 9px}
+.tzwrap{display:flex;align-items:center;gap:8px;justify-content:flex-end;margin-bottom:10px}
+.tzwrap label{font-size:10px;font-weight:700;letter-spacing:.6px;text-transform:uppercase;
+  color:rgba(255,255,255,.8);white-space:nowrap}
+#tz{background:rgba(255,255,255,.14);color:#fff;border:1px solid rgba(255,255,255,.4);
+  border-radius:8px;padding:6px 8px;font-size:12px;font-family:inherit;max-width:190px;
+  min-height:32px}
+#tz option{color:#12161a;background:#fff}
+@media(max-width:999px){.tzwrap{justify-content:flex-start;margin:12px 0 4px}}
 .progline{display:flex;justify-content:space-between;gap:10px;margin-top:7px;
   font-size:10.5px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;
   color:rgba(255,255,255,.82)}
@@ -275,6 +283,10 @@ footer img{vertical-align:middle;margin-top:5px;min-height:20px}
     <p class="story">Second season in the Championship &middot; chasing a fourth promotion in five years</p>
   </div>
   <div class="right">
+    <div class="tzwrap">
+      <label for="tz">Show times in</label>
+      <select id="tz" aria-label="Show kickoff times in this timezone"></select>
+    </div>
     <div class="sbar" aria-hidden="true"><i id="sbarfill"></i></div>
     <div class="progline"><span id="prog"></span><span id="streak"></span></div>
   </div>
@@ -327,8 +339,34 @@ const ukDay   = d => d.toLocaleDateString("en-GB", {...UK, weekday:"short"});
 const ukDayNo = d => d.toLocaleDateString("en-GB", {...UK, day:"numeric"});
 const ukMonth = d => d.toLocaleDateString("en-GB", {...UK, month:"short", year:"numeric"});
 const ukFull  = d => d.toLocaleDateString("en-GB", {...UK, day:"numeric", month:"short"});
-const TZ = Intl.DateTimeFormat().resolvedOptions().timeZone;
-const localTime = d => d.toLocaleTimeString("en-GB", {hour:"2-digit", minute:"2-digit"});
+const DEVICE_TZ = Intl.DateTimeFormat().resolvedOptions().timeZone;
+// Curated rather than all ~400 IANA zones: a 400-row select is unusable on a
+// phone, and this covers where Wrexham's audience actually watches from.
+const TZ_OPTS = [
+  ["__device__", `Your time (${DEVICE_TZ.split("/").pop().replace(/_/g, " ")})`],
+  ["Europe/London", "UK"],
+  ["Europe/Dublin", "Ireland"],
+  ["America/New_York", "US Eastern"],
+  ["America/Chicago", "US Central"],
+  ["America/Denver", "US Mountain"],
+  ["America/Los_Angeles", "US Pacific"],
+  ["America/Toronto", "Canada Eastern"],
+  ["Asia/Kolkata", "India"],
+  ["Asia/Dubai", "UAE"],
+  ["Asia/Singapore", "Singapore"],
+  ["Australia/Sydney", "Sydney"],
+];
+let TZ = DEVICE_TZ;
+try {                                  // remembered across visits
+  const saved = localStorage.getItem("wxm-tz");
+  if (saved && (saved === "__device__" || TZ_OPTS.some(o => o[0] === saved)))
+    TZ = saved === "__device__" ? DEVICE_TZ : saved;
+} catch (e) {}
+const localTime = d => d.toLocaleTimeString("en-GB", {timeZone: TZ, hour:"2-digit", minute:"2-digit"});
+const localDay  = d => d.toLocaleDateString("en-GB", {timeZone: TZ, weekday:"short", day:"numeric", month:"short"});
+const dayKey    = (d, tz) => d.toLocaleDateString("en-CA", {timeZone: tz});
+// true when the chosen zone is on a different calendar day to the UK kickoff
+const spansDay  = d => dayKey(d, TZ) !== dayKey(d, "Europe/London");
 
 function ago(iso){
   const m = (Date.now() - new Date(iso)) / 6e4;
@@ -389,11 +427,12 @@ function hero(d){  // d used for nextInfo below
   const when = dt.toLocaleString("en-GB", {...UK, weekday:"short", day:"numeric", month:"short",
                                            hour:"2-digit", minute:"2-digit"}) + " UK";
   const mine = localTime(dt), differs = TZ !== "Europe/London";
+  const tzName = (TZ_OPTS.find(o => o[0] === TZ) || [])[1] || TZ.split("/").pop().replace(/_/g, " ");
   $("#next").innerHTML = `<h2>Next match</h2>
     <div class="count" id="cd">&nbsp;</div>
     <div class="opp"><img class="crest" src="${esc(next.logo)}" alt="" loading="lazy"> ${next.home ? "vs" : "at"} <b>${esc(next.opponent)}</b>
       ${next.comp !== "League" ? `<span class="cbadge">${esc(next.comp)}</span>` : ""}</div>
-    <div class="next-when">${when}${differs ? ` &middot; ${mine} your time` : ""}
+    <div class="next-when">${when}${differs ? ` &middot; ${mine}${spansDay(dt) ? " " + esc(localDay(dt).split(" ")[0]) : ""} ${esc(tzName)}` : ""}
       ${(() => { const k = x => x.toLocaleDateString("en-CA", UK), now = new Date(),
                  tmr = new Date(now.getTime() + 864e5);
                  return k(dt) === k(now) ? `<span class="cdtag">Today</span>`
@@ -446,7 +485,7 @@ function fixtures(d){
       : m.awaitingResult ? `<div class="mtag" style="color:var(--mut)">Full time</div>`
       : isNext ? `<div class="mtag">Next</div>`
       : `<div class="mtime">${ukTime(dt)}
-           ${TZ !== "Europe/London" ? `<span class="mlocal">${localTime(dt)} you</span>` : ""}</div>`;
+           ${TZ !== "Europe/London" ? `<span class="mlocal">${localTime(dt)}${spansDay(dt) ? " " + esc(localDay(dt).split(" ")[0]) : ""}</span>` : ""}</div>`;
     html += `<div class="mrow${isNext ? " is-next" : ""}">
       <div class="mdate"><b>${ukDayNo(dt)}</b>${ukDay(dt)}</div>
       <img class="crest" src="${esc(m.logo)}" alt="" loading="lazy">
@@ -703,6 +742,20 @@ function info(d){
 }
 
 tabs();
+
+function initTZ(d){
+  const sel = $("#tz"); if (!sel) return;
+  sel.innerHTML = TZ_OPTS.map(([v, l]) => `<option value="${v}">${esc(l)}</option>`).join("");
+  let saved = "__device__";
+  try { saved = localStorage.getItem("wxm-tz") || "__device__"; } catch (e) {}
+  sel.value = TZ_OPTS.some(o => o[0] === saved) ? saved : "__device__";
+  sel.onchange = () => {
+    TZ = sel.value === "__device__" ? DEVICE_TZ : sel.value;
+    try { localStorage.setItem("wxm-tz", sel.value); } catch (e) {}
+    hero(d); fixtures(d);          // the only panels that render a clock
+  };
+}
+
 fetch("data.json").then(r => r.json()).then(d => {
   $("#comp").textContent = d.competition + " " + d.season;
   const lg = d.matches.filter(m => m.comp === "League");   // cups don't belong in league progress
@@ -731,6 +784,7 @@ fetch("data.json").then(r => r.json()).then(d => {
     }
   }
   info(d);
+  initTZ(d);
   const tc = $("#tocentre");
   if (tc) tc.onclick = e => { e.preventDefault(); document.querySelector('.tab[data-p="centre"]').click(); };
   const sb = $("#sharebtn"); if (sb) sb.onclick = () => shareResult(d);
