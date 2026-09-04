@@ -190,6 +190,9 @@ def clean_source(name):
 
 
 MAX_PER_SOURCE = 3
+# Google resurfaces older coverage — a 3-day-old report on a fixture that has not
+# happened this season reads as current news. Anything past this is dropped.
+MAX_NEWS_AGE_H = 48
 
 
 def fetch_news(limit=40):
@@ -210,7 +213,9 @@ def fetch_news(limit=40):
             "source": clean_source(source or it.findtext("source")),
             "published": rfc822(it.findtext("pubDate") or ""),
         })
-    items = [i for i in items if i["published"] and i["url"]]
+    cutoff = datetime.now(timezone.utc) - timedelta(hours=MAX_NEWS_AGE_H)
+    items = [i for i in items if i["published"] and i["url"]
+             and datetime.fromisoformat(i["published"]) >= cutoff]
     items.sort(key=lambda i: i["published"], reverse=True)
     # One outlet covering the opponent's town shouldn't take an eighth of the
     # feed; cap each source so the list stays varied.
