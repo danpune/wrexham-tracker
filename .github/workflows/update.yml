@@ -40,7 +40,7 @@ jobs:
       - name: Refresh the share card
         run: |
           python -m pip install --quiet pillow
-          python build_assets.py || true
+          python build_assets.py --card || true
 
       - name: Commit if changed
         run: |

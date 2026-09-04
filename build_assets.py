@@ -10,7 +10,7 @@ Deliberately typographic: the club crest is copyrighted, so the marks here use a
 plain wordmark. Crests shown in the app are hotlinked from ESPN at runtime,
 which is a different thing from bundling them.
 """
-import io, json, os
+import io, json, os, sys
 from datetime import datetime
 from zoneinfo import ZoneInfo
 from PIL import Image, ImageDraw, ImageFont
@@ -128,8 +128,12 @@ def share_card():
 
 
 if __name__ == "__main__":
-    icon(192, "icon-192.png")
-    icon(512, "icon-512.png")
-    icon(180, "apple-touch-icon.png")
+    # CI passes --card: the icons are static branding and would otherwise flip
+    # between the macOS and Ubuntu font on every run, churning the repo (and
+    # leaving unstaged files that abort the workflow's rebase).
+    if "--card" not in sys.argv:
+        icon(192, "icon-192.png")
+        icon(512, "icon-512.png")
+        icon(180, "apple-touch-icon.png")
+        print("wrote icons")
     share_card()
-    print("wrote icon-192 icon-512 apple-touch-icon preview.jpg")
