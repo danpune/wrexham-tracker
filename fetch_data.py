@@ -70,7 +70,10 @@ def rfc822(s):
 # --- fixtures & results -------------------------------------------------------
 # ESPN's team/schedule endpoint only returns matches already played, so walk the
 # league scoreboard month by month and filter. 11 requests, cheap, complete.
-def fetch_matches():
+def fetch_matches(league_form=None):
+    """league_form, if given, is filled with {team_id: [results]} for every club
+    from the same scoreboard responses — the table's Form column costs no extra
+    requests because these pages are already being fetched."""
     out = []
     for league, comp_name in COMPETITIONS:
       for year, month in SEASON_MONTHS:
@@ -85,6 +88,21 @@ def fetch_matches():
         for ev in data.get("events", []):
             comp = ev["competitions"][0]
             teams = comp["competitors"]
+            if league_form is not None and league == LEAGUE:
+                st = comp.get("status", {}).get("type", {})
+                if st.get("completed") and len(teams) == 2:
+                    for me, them in ((teams[0], teams[1]), (teams[1], teams[0])):
+                        try:
+                            a, b = int(me.get("score")), int(them.get("score"))
+                        except (TypeError, ValueError):
+                            continue
+                        league_form.setdefault(me["team"]["id"], []).append({
+                            "d": iso(ev["date"])[:10],
+                            "r": "W" if a > b else "L" if a < b else "D",
+                            "s": f"{a}-{b}",
+                            "o": them["team"].get("shortDisplayName") or them["team"]["displayName"],
+                            "h": me.get("homeAway") == "home",
+                        })
             if not any(t["team"]["id"] == TEAM_ID for t in teams):
                 continue
             us = next(t for t in teams if t["team"]["id"] == TEAM_ID)
@@ -131,7 +149,7 @@ def fetch_matches():
 
 
 # --- league table -------------------------------------------------------------
-def fetch_table():
+def fetch_table(league_form=None):
     data = get(f"https://site.api.espn.com/apis/v2/sports/soccer/{LEAGUE}/standings", as_json=True)
     entries = (data["children"][0]["standings"]["entries"] if "children" in data
                else data["standings"]["entries"])
@@ -154,6 +172,8 @@ def fetch_table():
             "gd": val("pointDifferential"),
             "points": val("points"),
             "deducted": val("deductions"),
+            "form": sorted(league_form.get(e["team"]["id"], []),
+                           key=lambda x: x["d"])[-5:] if league_form else [],
             "logo": LOGO % e["team"]["id"],
             "isWrexham": e["team"]["id"] == TEAM_ID,
         })
@@ -568,14 +588,15 @@ def main():
     except (OSError, ValueError):
         previous = {}
 
-    matches = fetch_matches()
+    league_form = {}
+    matches = fetch_matches(league_form)
     league = sum(1 for m in matches if m["comp"] == "League")
     if league < TOTAL_GAMES:
         # Failing here is the safe outcome: CI makes no commit and the last good
         # data.json stays deployed.
         raise SystemExit(f"only {league}/{TOTAL_GAMES} league fixtures from ESPN; "
                          "refusing to write a truncated season")
-    table = fetch_table()
+    table = fetch_table(league_form)
     data = {
         "updated": datetime.now(timezone.utc).isoformat(timespec="seconds"),
         "season": "2026/27",

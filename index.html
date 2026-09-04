@@ -99,6 +99,15 @@ header{border-bottom:1px solid var(--line)}
 .mini tr.me td{background:rgba(200,16,46,.09)}
 .mini tr.me td:nth-child(2){box-shadow:inset 3px 0 0 var(--red)}
 .mini tr.cut td{border-top:2px solid var(--red-dim)}
+.formcell{white-space:nowrap;text-align:right}
+.fp{display:inline-grid;place-items:center;width:19px;height:19px;border-radius:4px;
+  font-size:10px;font-weight:800;color:#fff;margin-left:3px;cursor:pointer;vertical-align:middle}
+.fp.W{background:var(--pill-w)} .fp.D{background:var(--pill-d)} .fp.L{background:var(--pill-l)}
+.fp:focus-visible{outline:2px solid var(--tx);outline-offset:1px}
+#tip{position:fixed;z-index:60;background:var(--tx);color:var(--panel);font-size:12px;
+  font-weight:600;padding:7px 10px;border-radius:8px;pointer-events:none;opacity:0;
+  transition:opacity .12s;max-width:70vw;box-shadow:0 4px 14px rgba(0,0,0,.25)}
+#tip.on{opacity:1}
 @media(max-width:520px){.hero{grid-template-columns:1fr}}
 .card{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:14px;box-shadow:var(--shadow)}
 .card h2{font-size:11px;font-weight:700;letter-spacing:.7px;text-transform:uppercase;color:var(--mut);margin-bottom:9px}
@@ -303,8 +312,8 @@ footer img{vertical-align:middle;margin-top:5px;min-height:20px}
 </div></header>
 
 <nav><div class="tabs" role="tablist">
-  <button class="tab" role="tab" aria-selected="true"  data-p="fixtures">Fixtures</button>
-  <button class="tab" role="tab" aria-selected="false" data-p="table">Table</button>
+  <button class="tab" role="tab" aria-selected="true"  data-p="table">Table</button>
+  <button class="tab" role="tab" aria-selected="false" data-p="fixtures">Fixtures</button>
   <button class="tab" role="tab" aria-selected="false" data-p="centre">Match</button>
   <button class="tab" role="tab" aria-selected="false" data-p="promo">Chances</button>
   <button class="tab" role="tab" aria-selected="false" data-p="squad">Squad</button>
@@ -313,9 +322,10 @@ footer img{vertical-align:middle;margin-top:5px;min-height:20px}
   <button class="tab" role="tab" aria-selected="false" data-p="info">About</button>
 </div></nav>
 
+<div id="tip" role="status" aria-live="polite"></div>
 <main class="wrap">
-  <section id="fixtures"><div class="skel">Loading…</div></section>
-  <section id="table" hidden></section>
+  <section id="table"></section>
+  <section id="fixtures" hidden><div class="skel">Loading…</div></section>
   <section id="promo" hidden></section>
   <section id="centre" hidden></section>
   <section id="squad" hidden></section>
@@ -368,6 +378,8 @@ try {                                  // remembered across visits
 } catch (e) {}
 const localTime = d => d.toLocaleTimeString("en-GB", {timeZone: TZ, hour:"2-digit", minute:"2-digit"});
 const localDay  = d => d.toLocaleDateString("en-GB", {timeZone: TZ, weekday:"short", day:"numeric", month:"short"});
+const fmtShort  = iso => new Date(iso + "T12:00:00Z")
+  .toLocaleDateString("en-GB", {day:"numeric", month:"short"});
 const dayKey    = (d, tz) => d.toLocaleDateString("en-CA", {timeZone: tz});
 // true when the chosen zone is on a different calendar day to the UK kickoff
 const spansDay  = d => dayKey(d, TZ) !== dayKey(d, "Europe/London");
@@ -525,12 +537,17 @@ function table(d){
     const cls = [r.isWrexham ? "wxm" : "", (r.rank === 7 || r.rank === 22) ? "line" : ""].join(" ").trim();
     return `<tr class="${cls}"><td>${r.rank}</td><td data-ded="${r.deducted > 0 ? r.deducted : ""}"><img class="crest" style="width:17px;height:17px;flex:none;vertical-align:-4px;margin-right:7px" src="${esc(r.logo)}" alt="" loading="lazy">${esc(r.team)}${r.deducted > 0 ? `<sup aria-label="minus ${r.deducted} points" title="${r.deducted} point deduction" style="color:var(--red);font-weight:700"> -${r.deducted}</sup>` : ""}</td>
       <td>${r.played}</td><td class="hide-sm">${r.won}</td><td class="hide-sm">${r.drawn}</td>
-      <td class="hide-sm">${r.lost}</td><td>${r.gd > 0 ? "+" : ""}${r.gd}</td><td>${r.points}</td></tr>`;
+      <td class="hide-sm">${r.lost}</td><td>${r.gd > 0 ? "+" : ""}${r.gd}</td>
+      <td class="hide-sm formcell">${(r.form || []).map(f => `<span class="fp ${f.r}" tabindex="0"
+        data-t="${esc(f.r === "W" ? "Won" : f.r === "L" ? "Lost" : "Drew")} ${esc(f.s)} ${f.h ? "v" : "at"} ${esc(f.o)} · ${esc(fmtShort(f.d))}"
+        title="${esc(f.r === "W" ? "Won" : f.r === "L" ? "Lost" : "Drew")} ${esc(f.s)} ${f.h ? "v" : "at"} ${esc(f.o)} · ${esc(fmtShort(f.d))}">${f.r}</span>`).join("")}</td>
+      <td>${r.points}</td></tr>`;
   }).join("");
   $("#table").innerHTML = `<table><thead><tr><th scope="col"></th><th scope="col">Team</th><th scope="col">P</th>
-    <th scope="col" class="hide-sm">W</th><th scope="col" class="hide-sm">D</th><th scope="col" class="hide-sm">L</th><th scope="col">GD</th><th scope="col">Pts</th></tr></thead>
+    <th scope="col" class="hide-sm">W</th><th scope="col" class="hide-sm">D</th><th scope="col" class="hide-sm">L</th><th scope="col">GD</th><th scope="col" class="hide-sm">Form</th><th scope="col">Pts</th></tr></thead>
     <tbody>${rows}</tbody></table>
-    <div class="tkey">Line after 6th &mdash; <b>playoff cut</b>. Line after 21st &mdash; relegation.<br>
+    <div class="tkey"><b>Form</b> reads oldest to newest &mdash; tap or hover a result for the score.<br>
+    Line after 6th &mdash; <b>playoff cut</b>. Line after 21st &mdash; relegation.<br>
     Top 2 promoted automatically; 3rd&ndash;6th enter the playoffs.</div>`;
 }
 
@@ -765,6 +782,26 @@ function info(d){
     target="_blank" rel="noopener noreferrer" style="color:var(--red);font-weight:600">Open an issue</a>.</div></div>`;
 }
 
+// title= covers desktop hover; phones need a tap, so mirror it into a tooltip
+(() => {
+  const tip = $("#tip");
+  const show = el => {
+    tip.textContent = el.dataset.t;
+    tip.classList.add("on");
+    const r = el.getBoundingClientRect(), w = tip.offsetWidth;
+    tip.style.left = Math.max(8, Math.min(innerWidth - w - 8, r.left + r.width / 2 - w / 2)) + "px";
+    tip.style.top = Math.max(8, r.top - tip.offsetHeight - 8) + "px";
+  };
+  const hide = () => tip.classList.remove("on");
+  document.addEventListener("click", e => {
+    const p = e.target.closest(".fp");
+    p ? show(p) : hide();
+  });
+  document.addEventListener("focusin", e => { if (e.target.closest(".fp")) show(e.target); });
+  document.addEventListener("focusout", hide);
+  addEventListener("scroll", hide, {passive: true});
+})();
+
 tabs();
 
 function initTZ(d){
@@ -803,7 +840,8 @@ fetch("data.json").then(r => r.json()).then(d => {
     try { fn(d); }
     catch (err) {
       console.error(name + " failed", err);
-      const el = $("#" + (name === "hero" ? "fixtures" : name));
+      // hero has no panel of its own; surface its failure in the tab that is open
+      const el = $("#" + (name === "hero" ? "table" : name));
       if (el && !el.innerHTML) el.innerHTML = "<div class='skel'>This section couldn&rsquo;t load.</div>";
     }
   }
