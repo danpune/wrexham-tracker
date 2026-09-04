@@ -346,17 +346,16 @@ def fetch_odds(matches, lookahead=5):
 
 # --- match centre ------------------------------------------------------------
 # ESPN's summary endpoint carries team stats, the goal/card timeline and both
-# XIs. Pulled for the latest finished match only -- older games would bloat
-# data.json for something nobody scrolls back to.
+# XIs. The latest match goes in data.json; every other finished game is cached
+# in archive.json, which the page fetches only when someone opens the archive.
 KEEP_STATS = ["possessionPct", "totalShots", "shotsOnTarget", "wonCorners",
               "foulsCommitted", "yellowCards", "redCards", "saves"]
 
 
-def fetch_summary(matches):
-    done = [m for m in matches if m["completed"]]
-    if not done:
-        return None
-    m = done[-1]
+def match_detail(m):
+    """stats / goal-and-card timeline / XIs for one finished match.
+
+    None when ESPN will not answer, so a blip never overwrites a good cache."""
     try:
         d = get(f"https://site.api.espn.com/apis/site/v2/sports/soccer/{m['league']}"
                 f"/summary?event={m['id']}", as_json=True)
@@ -395,6 +394,19 @@ def fetch_summary(matches):
              "pos": (p.get("position") or {}).get("abbreviation", "")}
             for p in r.get("roster", []) if p.get("starter")]
 
+    return {"stats": stats, "events": goals, "lineups": lineups}
+
+
+def fetch_summary(matches):
+    """The match-centre payload for the most recent finished game."""
+    done = [m for m in matches if m["completed"]]
+    if not done:
+        return None
+    m = done[-1]
+    det = match_detail(m)
+    if det is None:
+        return None
+
     hl = {}
     try:                                  # optional, curated, merge-only
         with open(os.path.join(DIR, "highlights.json")) as f:
@@ -408,7 +420,33 @@ def fetch_summary(matches):
             "match": {"opponent": m["opponent"], "logo": m["logo"], "home": m["home"],
                       "us": m["us"], "them": m["them"], "date": m["date"],
                       "comp": m["comp"], "result": m["result"]},
-            "stats": stats, "events": goals, "lineups": lineups}
+            **det}
+
+
+def build_archive(matches):
+    """archive.json: {event id -> stats/events/lineups} for every finished game.
+
+    A finished match's summary never changes, so each game is fetched exactly
+    once, ever -- the file is a cache, not a rebuild. Kept out of data.json so
+    the season's worth of detail costs nothing on first paint.
+    """
+    path = os.path.join(DIR, "archive.json")
+    try:
+        with open(path) as f:
+            arch = json.load(f)
+    except (OSError, ValueError):
+        arch = {}
+    added = 0
+    for m in matches:
+        if (not m["completed"]) or m.get("awaitingResult") or m["id"] in arch:
+            continue
+        det = match_detail(m)
+        if det:                           # a failed fetch retries next run
+            arch[m["id"]] = det
+            added += 1
+    with open(path, "w") as f:
+        json.dump(arch, f, separators=(",", ":"), sort_keys=True)
+    return len(arch), added
 
 
 # WMO weather codes -> a short label. Open-Meteo is free and needs no key.
@@ -612,10 +650,12 @@ def main():
         "squad": fetch_squad(),
     }
     write_ics(matches)
+    kept, added = build_archive(matches)
     with open(os.path.join(DIR, "data.json"), "w") as f:
         json.dump(data, f, separators=(",", ":"))
     print(f"matches={len(matches)} (league={sum(1 for m in matches if m['comp']=='League')}) table={len(table)} news={len(data['news'])} "
-          f"pods={len(data['podcasts'])} odds={len(data['odds'])} squad={len(data['squad'])}")
+          f"pods={len(data['podcasts'])} odds={len(data['odds'])} squad={len(data['squad'])} "
+          f"archive={kept} (+{added})")
 
 
 if __name__ == "__main__":

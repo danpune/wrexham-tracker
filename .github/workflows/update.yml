@@ -46,7 +46,7 @@ jobs:
         run: |
           git config user.name  "wxm-bot"
           git config user.email "actions@users.noreply.github.com"
-          git add -A data.json highlights.json ics preview.jpg
+          git add -A data.json archive.json highlights.json ics preview.jpg
           git diff --staged --quiet || git commit -m "Update data $(date -u +%FT%TZ)"
           git pull --rebase origin main
           git push
