@@ -751,7 +751,8 @@ function centre(d){
         match: {opponent: oppName, logo: oppId ? crest(oppId) : m.logo,
                 ourLogo: crest(team), ourName,
                 home, us, them, date: iso, comp: m.comp || "League", pens: m.pens,
-                result: us > them ? "W" : us < them ? "L" : "D"},
+                // data.json knows a shootout winner; goals alone call it a draw
+                result: m.result || (us > them ? "W" : us < them ? "L" : "D")},
         // Cup ties aren't in league.json, so there's no opponent id to hand;
         // the archive entry is keyed by both clubs' ids, so take the other one.
         ...sidesFor(det, team, oppId || Object.keys({...(det?.stats || {}), ...(det?.lineups || {})})
@@ -846,7 +847,7 @@ function odds(d){
   return (rows || `<div class="card"><div class="note" style="margin:0">No live markets for the
     next fixtures yet. Polymarket usually lists a Championship match a few days out.</div></div>`) +
     `<div class="note">Polymarket&rsquo;s quoted prices, checked ${esc(ago(d.updated))} &mdash; the middle of each
-     market&rsquo;s order book, refreshed about every half hour. These markets trade thinly until near
+     market&rsquo;s order book, refreshed a few times a day. These markets trade thinly until near
      kickoff, so read them as a market-maker&rsquo;s estimate rather than a crowd&rsquo;s verdict. Not a model.
      Each of the three outcomes is its own contract, so the percentages may not sum to exactly 100%.<br>
      Kalshi lists these same fixtures but every contract is currently quoteless &mdash; no bid, ask or open
@@ -880,7 +881,8 @@ function shareResult(d){
   x.textAlign = "left";
 
   x.fillStyle = "#8b929e"; x.font = F(26, 700);
-  x.fillText(m.home ? "at the Racecourse Ground" : "away", 80, 470);
+  x.fillText(`${m.pens ? `${m.result === "W" ? "WON" : "LOST"} ${m.pens} ON PENS  ·  ` : ""}`
+             + (m.home ? "at the Racecourse Ground" : "away"), 80, 470);
   x.fillStyle = "#e0242f"; x.font = F(24, 700);
   x.fillText("danpune.github.io/wrexham-tracker", 80, 552);
 
@@ -888,7 +890,7 @@ function shareResult(d){
     if (!blob) return;
     const file = new File([blob], "wrexham-result.png", {type: "image/png"});
     if (navigator.canShare && navigator.canShare({files: [file]})){
-      navigator.share({files: [file], title: "Wrexham", text: `Wrexham ${m.us}-${m.them} ${m.opponent}`})
+      navigator.share({files: [file], title: "Wrexham", text: `Wrexham ${m.us}-${m.them}${m.pens ? ` (${m.pens} pens)` : ""} ${m.opponent}`})
         .catch(() => {});                                  // user dismissed the sheet
     } else {
       const url = URL.createObjectURL(blob), a = document.createElement("a");

@@ -203,6 +203,35 @@ def test_result_of_shootout():
     assert f.result_of({"score": "3"}, {"score": "0"}) == ("W", None)
 
 
+
+def test_near_cup_clip_does_not_reach_league_game():
+    """Cup tie, then a league game against the same club two days later. A clip
+    titled with no competition can't be told apart on /videos (no dates), so
+    neither game may take it from there. An unambiguous cup tie still can."""
+    import json, os, tempfile
+    from datetime import datetime, timedelta, timezone
+    import build_highlights as h
+    ago = lambda days: (datetime.now(timezone.utc) - timedelta(days=days)).isoformat(timespec="minutes")
+    def run(matches, videos):
+        with tempfile.TemporaryDirectory() as tmp:
+            json.dump({"matches": matches}, open(os.path.join(tmp, "data.json"), "w"))
+            json.dump({"highlights": {}}, open(os.path.join(tmp, "highlights.json"), "w"))
+            saved = (h.DIR, h.channel_videos, h.channel_search, h.official)
+            h.DIR, h.channel_videos = tmp, lambda handle: videos
+            h.channel_search, h.official = (lambda ch, q: []), (lambda vid: True)
+            try:
+                h.main()
+                return json.load(open(os.path.join(tmp, "highlights.json")))["highlights"]
+            finally:
+                h.DIR, h.channel_videos, h.channel_search, h.official = saved
+    game = lambda i, comp, days: {"id": i, "opponent": "Swansea City", "comp": comp,
+                                  "date": ago(days), "completed": True}
+    bare = [("BAREcup0001", "HIGHLIGHTS | Swansea City vs Wrexham AFC")]
+    assert run([game("cup", "FA Cup", 3), game("lg", "League", 1)], bare) == {}
+    only_cup = run([game("cup", "FA Cup", 2)], bare)
+    assert only_cup.get("cup", {}).get("yt") == "BAREcup0001"
+
+
 if __name__ == "__main__":
     for name, fn in list(globals().items()):
         if name.startswith("test_") and callable(fn):

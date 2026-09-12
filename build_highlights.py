@@ -296,7 +296,7 @@ def main():
         if m["completed"]:
             cup = m.get("comp", "League") != "League"
             fixtures.append((m["id"], "Wrexham", m["opponent"], m["date"],
-                             cup, cup and near_other(m)))
+                             cup, near_other(m)))
     try:
         lg = json.load(open(os.path.join(DIR, "league.json")))
         names = {k: v["n"] for k, v in lg["teams"].items()}
@@ -321,8 +321,13 @@ def main():
         played = age_days_since(when)
         if played is None or played > 3:
             continue
+        # Same clubs again within a fortnight: a bare-titled clip here could be
+        # either game, and /videos has no dates to tell them apart. The dated
+        # search below can -- a clip must come after this fixture's kickoff.
+        if near:
+            continue
         for vid, title in videos:
-            if vid in used or not matches_title(ha, ab, title, cup, near) or not official(vid):
+            if vid in used or not matches_title(ha, ab, title, cup, cup and near) or not official(vid):
                 continue
             hl[mid] = {"yt": vid, "title": title, "teams": [ha, ab]}
             used.add(vid)
@@ -351,7 +356,7 @@ def main():
             except Exception as e:        # a 429 on one channel keeps the rest
                 print(f"  search {ch}: {type(e).__name__}", file=sys.stderr)
         for vid, title, pub in results:
-            if vid in used or not matches_title(ha, ab, title, cup, near):
+            if vid in used or not matches_title(ha, ab, title, cup, cup and near):
                 continue
             # Not a different season, not the reverse fixture, and not an
             # earlier cup tie between the same clubs.
