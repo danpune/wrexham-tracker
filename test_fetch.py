@@ -56,9 +56,6 @@ def test_strip_html():
     assert f.strip_html(None) == ""
 
 
-if __name__ == "__main__":
-    test_rfc822(); test_projection(); test_safe_url(); test_strip_html()
-    print("ok")
 
 
 def test_matches_title():
@@ -95,11 +92,18 @@ def test_age_days():
     assert h.age_days("Streamed 2 days ago") == 2
     assert h.age_days("") is None
     assert h.age_days(None) is None
-    # the guard the search pass applies: |video age - match age| <= 35
-    match_age = 18                       # Cardiff (A), 17 Aug, read on 4 Sep
-    assert abs(h.age_days("2 weeks ago") - match_age) <= 35      # correct clip
-    assert abs(h.age_days("10 months ago") - match_age) > 35     # last season's
-    assert abs(h.age_days("2 years ago") - match_age) > 35
+    # the guard the search pass applies: posted after kickoff, soon after
+    ok = h.posted_after_match
+    assert ok("2 weeks ago", 18)          # Cardiff (A), 17 Aug, read on 4 Sep
+    assert ok("5 hours ago", 0)           # same-night upload
+    assert ok("1 day ago", 1)
+    assert not ok("10 months ago", 18)    # last season's
+    assert not ok("2 years ago", 18)
+    # Blackburn v Sheff Utd: Carabao Cup 25 Aug, league 8 Sep, both 1-2. The
+    # cup clip is 2 weeks old against a league game 4 days old -- before kickoff.
+    assert not ok("2 weeks ago", 4)
+    assert not ok("", 4)
+    assert not ok("3 days ago", None)
 
 
 def test_rejects_bts_reels():
@@ -110,3 +114,41 @@ def test_rejects_bts_reels():
     assert not h.matches_title("Millwall", "Wrexham", "TUNNEL CAM | Millwall v Wrexham highlights")
     assert h.matches_title("Blackburn Rovers", "Queens Park Rangers",
                            "Blackburn Rovers 1-2 QPR | Extended Highlights")
+
+
+def test_title_traps_from_review():
+    """Every title here was attached, or would have been, to the wrong match."""
+    import build_highlights as h
+    ok = h.matches_title
+    # "derby" is a football noun -- this clip went on Charlton v Derby County
+    assert not ok("Charlton Athletic", "Derby County",
+                  "LONDON DERBY! | West Ham United v Charlton Athletic extended highlights")
+    assert not ok("Preston North End", "Derby County",
+                  "DERBY DAY! | Preston North End v Blackburn Rovers highlights")
+    assert ok("Portsmouth", "Derby County",
+              "SZMODICS SCORES AGAIN! | Portsmouth v Derby County Extended Highlights")
+    # "sheffield" and "united" from two different clubs
+    assert not ok("Sheffield United", "West Ham United",
+                  "Sheffield Wednesday v West Ham United | highlights")
+    assert ok("Sheffield United", "Bolton Wanderers",
+              "WHAT A GAME! | Sheffield United v Bolton Wanderers Extended Highlights")
+    assert ok("Sheffield United", "Stoke City", "Sheff Utd 2-0 Stoke | Highlights")
+    # not the first team
+    assert not ok("Derby County", "Middlesbrough",
+                  "HIGHLIGHTS | Derby County Women Vs Middlesbrough (H)")
+    assert not ok("Swansea City", "Sheffield United",
+                  "Swansea City v Sheffield United | U21 | Highlights")
+    assert not ok("Swansea City", "Wrexham", "HIGHLIGHTS | Swansea City Women vs Wrexham AFC Women")
+    # a cup tie is not the league game between the same clubs...
+    assert not ok("Southampton", "West Ham United",
+                  "HIGHLIGHTS: Southampton 1-4 West Ham | Carabao Cup")
+    # ...but it is exactly what a cup fixture needs
+    assert ok("Southampton", "West Ham United",
+              "HIGHLIGHTS: Southampton 1-4 West Ham | Carabao Cup", cup=True)
+
+
+if __name__ == "__main__":
+    for name, fn in list(globals().items()):
+        if name.startswith("test_") and callable(fn):
+            fn()
+    print("ok")

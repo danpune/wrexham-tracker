@@ -82,6 +82,25 @@ def age_days(published):
     return int(m.group(1)) * UNITS[m.group(2)] if m else None
 
 
+def posted_after_match(published, played):
+    """Could an upload YouTube dates as `published` be the highlights of a match
+    played `played` days ago?
+
+    It has to come AFTER kickoff. A window either side of the match is not
+    enough: Blackburn v Sheffield United met in the Carabao Cup on 25 Aug and the
+    league on 8 Sep, both 1-2, and the cup clip sat 14 days before the league
+    game -- inside a symmetric window, and invisible to a scoreline check.
+    YouTube floors ages to its unit ("2 weeks" is 14-20 days), so the upper
+    edge of the window widens by one unit.
+    """
+    m = re.search(r"(\d+)\s+(second|minute|hour|day|week|month|year)s?\s+ago", published or "")
+    if not m or played is None:
+        return False
+    age = int(m.group(1)) * UNITS[m.group(2)]
+    unit = max(1, UNITS[m.group(2)])
+    return age <= played + 1 and played - age <= unit + 3
+
+
 def channel_search(handle, query):
     """(videoId, title, publishedText) from a channel's own search page.
 
@@ -131,15 +150,13 @@ ALIASES = {
     "west bromwich albion": "west brom",
     "wolverhampton wanderers": "wolves",
     "preston north end": "preston",
-    "sheffield united": "sheff utd",
-    "sheffield wednesday": "sheff wed",
     # clubs title their own uploads with the nickname: "Highlights | Pompey v QPR"
     "portsmouth": "pompey",
     "middlesbrough": "boro",
 }
 
 
-def matches_title(a, b, title):
+def matches_title(a, b, title, cup=False):
     """True when the title is a highlights upload naming BOTH of these clubs.
 
     Requiring both names is what kills the West Ham / West Bromwich collision --
@@ -154,10 +171,33 @@ def matches_title(a, b, title):
     if re.search(r"\bbts\b|\balt(ernate)? highlights\b|roving cam|behind the scenes"
                  r"|\bcam:|fan cam|tunnel cam", t):
         return False
+    # Trusted club channels also post their women's, academy and pre-season
+    # games against the same opponents, every week. Not the first team.
+    if re.search(r"\bwomen'?s?\b|\bu\d\d'?s?\b|under-?\d\d|academy|development squad"
+                 r"|pre-?season|friendly|\bpl2\b|premier league 2", t):
+        return False
+    # A cup tie between two league opponents looks identical by name. Cup words
+    # only disqualify a league fixture -- Wrexham's own cup ties need them.
+    if not cup and re.search(r"carabao|league cup|\bfa cup\b|emirates fa|trophy", t):
+        return False
     return _names(a, t) and _names(b, t)
 
 
+# Clubs that are only safe to match as a whole name. "derby" is a football noun
+# ("LONDON DERBY! | West Ham v Charlton" was attached to Charlton v Derby), and
+# "sheffield" + "united" can come from two different clubs in one title
+# ("Sheffield Wednesday v West Ham United").
+PHRASES = {
+    "derby county": r"derby\s+county",
+    "sheffield united": r"sheff(ield)?\s+(united|utd)",
+    "sheffield wednesday": r"sheff(ield)?\s+(wednesday|wed)",
+}
+
+
 def _names(club, t):
+    phrase = PHRASES.get(club.lower())
+    if phrase:
+        return bool(re.search(rf"\b{phrase}\b", t))
     alias = ALIASES.get(club.lower())
     if alias and re.search(rf"\b{re.escape(alias)}\b", t):
         return True
@@ -169,10 +209,6 @@ def key_words(opponent):
     drop = {"city", "town", "united", "athletic", "rovers", "wanderers", "county",
             "albion", "forest", "fc", "afc"}
     words = [w.lower() for w in re.sub(r"[^\w\s]", " ", opponent).split()]
-    # Sheffield United and Sheffield Wednesday differ only in a word `drop`
-    # removes, which would make either match the other's highlights.
-    if words and words[0] == "sheffield":
-        return set(words)
     keep = [w for w in words if w not in drop and len(w) >= 5]
     return set(keep or [w for w in words if w not in drop] or words)
 
@@ -202,8 +238,9 @@ def main():
         # entries written before the league-wide scan stored only the opponent
         return v.get("teams") or ["Wrexham", v.get("opponent", "")]
 
+    cups = {m["id"] for m in data["matches"] if m.get("comp", "League") != "League"}
     dropped = [mid for mid, v in hl.items()
-               if v.get("title") and not matches_title(*pair(v), v["title"])]
+               if v.get("title") and not matches_title(*pair(v), v["title"], cup=mid in cups)]
     for mid in dropped:
         print(f"  dropping stale/mismatched entry {mid}: {hl[mid].get('title','')[:60]}")
         del hl[mid]
@@ -224,24 +261,34 @@ def main():
     fixtures = []
     for m in data["matches"]:
         if m["completed"]:
-            fixtures.append((m["id"], "Wrexham", m["opponent"], m["date"]))
+            fixtures.append((m["id"], "Wrexham", m["opponent"], m["date"],
+                             m.get("comp", "League") != "League"))
     try:
         lg = json.load(open(os.path.join(DIR, "league.json")))
         names = {k: v["n"] for k, v in lg["teams"].items()}
         for m in lg["matches"]:
             if m["c"] and m["i"] not in {f[0] for f in fixtures}:
-                fixtures.append((m["i"], names.get(m["h"], ""), names.get(m["a"], ""), m["d"]))
+                fixtures.append((m["i"], names.get(m["h"], ""), names.get(m["a"], ""),
+                                 m["d"], False))
     except (OSError, ValueError, KeyError):
         pass
     fixtures.sort(key=lambda f: f[3], reverse=True)
 
-    used = set()
+    # Seeded from what is already stored: starting empty let a video attached in
+    # an earlier run be attached again to a second fixture.
+    used = {v["yt"] for v in hl.values()}
     added = 0
-    for mid, ha, ab, when in fixtures:
+    for mid, ha, ab, when, cup in fixtures:
         if mid in hl or not (ha and ab):
             continue
+        # /videos only holds ~2 days of uploads and carries no dates. An older
+        # fixture can only match a different game there -- leave it to the
+        # dated search below.
+        played = age_days_since(when)
+        if played is None or played > 3:
+            continue
         for vid, title in videos:
-            if vid in used or not matches_title(ha, ab, title) or not official(vid):
+            if vid in used or not matches_title(ha, ab, title, cup) or not official(vid):
                 continue
             hl[mid] = {"yt": vid, "title": title, "teams": [ha, ab]}
             used.add(vid)
@@ -256,20 +303,25 @@ def main():
     misses = doc.setdefault("misses", {})
     todo = [f for f in fixtures
             if f[0] not in hl and f[1] and f[2] and misses.get(f[0], 0) < 3]
-    for mid, ha, ab, when in todo[:MAX_SEARCHES]:
+    for mid, ha, ab, when, cup in todo[:MAX_SEARCHES]:
         played = age_days_since(when)
         found = None
         where = ["@theEFL", "@cbssportsgolazo",
                  CLUB_CHANNELS.get(ha), CLUB_CHANNELS.get(ab)]
-        for vid, title, pub in [v for ch in where if ch
-                                for v in channel_search(ch, f"{ha} {ab} highlights")]:
-            if vid in used or not matches_title(ha, ab, title):
+        results = []
+        for ch in where:
+            if not ch:
                 continue
-            age = age_days(pub)
-            # A fixture's highlights go up within a day of it. Anything from a
-            # different season -- or the reverse fixture months away -- is not
-            # this match, however well the two club names line up.
-            if age is None or played is None or abs(age - played) > 35:
+            try:
+                results += channel_search(ch, f"{ha} {ab} highlights")
+            except Exception as e:        # a 429 on one channel keeps the rest
+                print(f"  search {ch}: {type(e).__name__}", file=sys.stderr)
+        for vid, title, pub in results:
+            if vid in used or not matches_title(ha, ab, title, cup):
+                continue
+            # Not a different season, not the reverse fixture, and not an
+            # earlier cup tie between the same clubs.
+            if not posted_after_match(pub, played):
                 continue
             if not official(vid):
                 continue
@@ -281,7 +333,9 @@ def main():
             misses.pop(mid, None)
             added += 1
             print(f"  [search] {when[:10]} {ha} v {ab}: {found[0]}  {found[1][:46]}")
-        else:
+        elif played is not None and played >= 2:
+            # Clubs upload hours after full time; counting misses on day 0 spent
+            # all three tries before the video existed.
             misses[mid] = misses.get(mid, 0) + 1
 
     if added or dropped or todo:
@@ -301,6 +355,14 @@ def main():
             json.dump(lg, open(lp, "w"), separators=(",", ":"))
         except (OSError, ValueError, KeyError):
             pass
+        # Same for data.json, which drives the Fixtures tab, the hero card and the
+        # default Match view -- otherwise those trail league.json by a whole run.
+        for m in data["matches"]:
+            m["yt"] = (hl.get(m["id"]) or {}).get("yt")
+        done = [m for m in data["matches"] if m["completed"]]
+        if done and data.get("lastMatch"):
+            data["lastMatch"]["yt"] = done[-1]["yt"]
+        json.dump(data, open(os.path.join(DIR, "data.json"), "w"), separators=(",", ":"))
     print(f"added {added}, total {len(hl)}")
 
 

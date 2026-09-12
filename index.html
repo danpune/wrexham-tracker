@@ -683,10 +683,17 @@ function centre(d){
   fillMatches(wxmDone.map(m => ({
     id: m.id, label: `${m.opponent} (${m.home ? "H" : "A"}) \u00b7 ${m.result} `
        + `${m.us}\u2013${m.them} \u00b7 ${fmtShort(m.date.slice(0, 10))}`, yt: m.yt})));
-  renderMatch(d, d.lastMatch);
+  if (d.lastMatch) renderMatch(d, d.lastMatch);
+  else $("#mcbody").innerHTML = "<div class='skel'>Loading match&hellip;</div>";
 
-  league().then(lg => {
-    if (!lg) { $("#mpnote").textContent = "Other clubs' games couldn't load \u2014 Wrexham's are all here."; return; }
+  // league.json is only for this tab, so it waits until the tab is opened.
+  let started = false;
+  const start = () => { if (started) return; started = true; league().then(lg => {
+    if (!lg) {
+      $("#mpnote").textContent = "Other clubs' games couldn't load \u2014 Wrexham's are all here.";
+      if (!d.lastMatch) $("#mcbody").innerHTML = "<div class='skel'>Match details couldn&rsquo;t load.</div>";
+      return;
+    }
     const names = Object.entries(lg.teams).sort((a, b) => a[1].n.localeCompare(b[1].n));
     $("#tpick").innerHTML = names.map(([id, t]) =>
       `<option value="${esc(id)}"${id === WXM ? " selected" : ""}>${esc(t.n)}</option>`).join("");
@@ -715,10 +722,12 @@ function centre(d){
       if (team === WXM && d.lastMatch && id === wxmDone[0].id) return renderMatch(d, d.lastMatch);
       const m = lg.matches.find(x => x.i === id)
              || d.matches.find(x => x.id === id);            // a Wrexham cup tie
-      if (!m) return;
+      if (!m){ $("#mcbody").innerHTML = "<div class='skel'>No games played yet.</div>"; return; }
       const iso = m.d || m.date, ym = iso.slice(0, 7);
       const det = (await month(ym))[id] || null;
-      if ($("#mpick").value !== id) return;                  // a newer pick won the race
+      // A newer pick won the race. Compare the team as well: both sides of one
+      // fixture share an event id, so id alone let West Ham's view land under Wrexham.
+      if ($("#mpick").value !== id || $("#tpick").value !== team) return;
       const home = m.h ? m.h === team : m.home;
       const oppId = m.h ? (home ? m.a : m.h) : null;
       const us = m.h ? (home ? m.hs : m.as) : m.us;
@@ -732,13 +741,18 @@ function centre(d){
                 ourLogo: crest(team), ourName,
                 home, us, them, date: iso, comp: m.comp || "League",
                 result: us > them ? "W" : us < them ? "L" : "D"},
-        ...sidesFor(det, team, oppId || ""),
+        // Cup ties aren't in league.json, so there's no opponent id to hand;
+        // the archive entry is keyed by both clubs' ids, so take the other one.
+        ...sidesFor(det, team, oppId || Object.keys({...(det?.stats || {}), ...(det?.lineups || {})})
+                                       .find(k => k !== team) || ""),
       });
     };
 
     $("#tpick").onchange = () => { fillMatches(listFor($("#tpick").value)); show(); };
     $("#mpick").onchange = show;
-  });
+    if (!d.lastMatch) show();
+  }); };
+  $('.tab[data-p="centre"]').addEventListener("click", start);
 }
 
 function fillMatches(list){
