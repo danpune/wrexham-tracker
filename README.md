@@ -25,13 +25,23 @@ dependencies, no external fonts.
 ## Notes
 
 - ESPN's `teams/{id}/schedule` endpoint only returns matches **already played**, so fixtures
-  come from the league scoreboard filtered to Wrexham. 11 requests covers the season.
+  come from the monthly scoreboards for the league, the EFL Cup and the FA Cup: 33 requests
+  covers the season. The same league pages carry every club's results, which is where the
+  table's Form column and `league.json` (all 552 league fixtures) come from at no extra cost.
 - ESPN rate-limits bursts with a 403; `get()` retries with a short backoff.
 - The promotion number is a straight-line points-per-game projection against the historical
   ~72-point playoff cut. It stays hidden until 8 games are played, because extrapolating from
   three is noise. It is not a simulation.
-- Kick-off times render in `Europe/London` regardless of where the viewer is.
-- League matches only — cup runs aren't included.
+- Kick-off times show in UK time, plus the viewer's own zone (or one they pick) beside them.
+- Cup ties are included; the table, projection and form use league games only.
+- The Match tab covers every club's season. Each finished game's stats are fetched once and
+  cached in `archive/YYYY-MM.json`, loaded only when that month is opened.
+- Highlights come only from official channels (the EFL, CBS Sports Golazo and the 24 clubs'
+  own), checked by oEmbed `author_url`. A clip must name both clubs, be uploaded after
+  kickoff, and not name a cup for a league game (nor omit it for a cup tie against a club
+  Wrexham also play in the league that fortnight) — see `build_highlights.py` for why each rule exists.
+- A postponed match shows as postponed: it is not counted as played and leaves the calendar
+  feed until ESPN gives it a new date.
 - Odds come from Polymarket, matched per fixture (a generic "Wrexham" search only ranks up
   *resolved* past events). Kalshi lists the same fixtures under `KXEFLCHAMPIONSHIPGAME` but every
   contract is quoteless — no bid, ask or open interest — so it is deliberately not wired in.

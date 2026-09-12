@@ -147,8 +147,15 @@ def test_title_traps_from_review():
               "HIGHLIGHTS: Southampton 1-4 West Ham | Carabao Cup", cup=True)
     assert ok("Middlesbrough", "Wrexham",
               "DREAM DEBUT! | Middlesbrough v Wrexham Carabao Cup Extended Highlights", cup=True)
-    # and a league clip between the same clubs is not the cup tie
-    assert not ok("Swansea City", "Wrexham", "HIGHLIGHTS | Swansea City vs Wrexham AFC", cup=True)
+    # a cup tie with a league game against the same club close by is ambiguous:
+    # it needs the cup named, or a league clip lands on it
+    assert not ok("Swansea City", "Wrexham", "HIGHLIGHTS | Swansea City vs Wrexham AFC",
+                  cup=True, near=True)
+    assert ok("Ipswich Town", "Wrexham", "HIGHLIGHTS | Ipswich Town vs Wrexham AFC (FA Cup Fourth Round)",
+              cup=True, near=True)
+    # an unambiguous cup tie takes a clip that names no competition -- most do
+    assert ok("Preston North End", "Wrexham", "HIGHLIGHTS | Preston North End vs Wrexham AFC", cup=True)
+    assert ok("Wrexham", "Reading", "BROADHEAD DOUBLE! | Wrexham v Reading extended highlights", cup=True)
     assert not ok("Swansea City", "Cardiff City", "DEVELOPMENT HIGHLIGHTS: SWANSEA CITY 1-2 CARDIFF CITY")
 
 
@@ -164,6 +171,36 @@ def test_compact_ages():
     assert h.posted_after_match("7d ago", 7)
     assert h.posted_after_match("7 days ago", 7)
     assert not h.posted_after_match("10mo ago", 7)
+
+
+
+def test_match_state_postponed():
+    """A postponed match keeps a past kickoff and completed=false. It is not full
+    time, not awaiting a score, and not the next match."""
+    from datetime import datetime, timedelta, timezone
+    now = datetime(2026, 9, 12, 20, 0, tzinfo=timezone.utc)
+    past = now - timedelta(hours=6)
+    assert f.match_state({"name": "STATUS_POSTPONED", "completed": False}, past, now) == (False, False, True)
+    assert f.match_state({"name": "STATUS_ABANDONED", "completed": True}, past, now) == (False, False, True)
+    # the real "ESPN hasn't flipped full time yet" case still reads as awaiting
+    assert f.match_state({"name": "STATUS_SECOND_HALF", "completed": False}, past, now) == (False, True, False)
+    assert f.match_state({"name": "STATUS_FULL_TIME", "completed": True}, past, now) == (True, False, False)
+    assert f.match_state({"name": "STATUS_SCHEDULED", "completed": False},
+                         now + timedelta(days=2), now) == (False, False, False)
+    ms = [{"id": "1", "completed": False, "awaitingResult": False, "postponed": True},
+          {"id": "2", "completed": False, "awaitingResult": False, "postponed": False}]
+    assert f.next_match(ms)["id"] == "2"
+
+
+def test_result_of_shootout():
+    """Level after extra time, decided on penalties: shapes as ESPN returned them."""
+    # Millwall at QPR, EFL Cup: 1-1, Millwall won the shootout 2-0
+    qpr = {"score": "1", "shootoutScore": 0, "winner": False}
+    mil = {"score": "1", "shootoutScore": 2, "winner": True}
+    assert f.result_of(mil, qpr) == ("W", "2-0")
+    assert f.result_of(qpr, mil) == ("L", "0-2")
+    assert f.result_of({"score": "2"}, {"score": "2"}) == ("D", None)
+    assert f.result_of({"score": "3"}, {"score": "0"}) == ("W", None)
 
 
 if __name__ == "__main__":

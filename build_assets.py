@@ -35,6 +35,24 @@ def font(path, size):
     return ImageFont.truetype(path, size)
 
 
+def fitted(d, text, path, size, width):
+    """The largest font up to `size` that keeps `text` within `width` pixels.
+
+    Slicing to a character count did not bound the pixels: "WON 3-0 AT WEST
+    BROMWICH ALBION" ran off a 1200px card at 62px.
+    """
+    while size > 20 and d.textlength(text, font=font(path, size)) > width:
+        size -= 2
+    return font(path, size)
+
+
+def ordinal(n):
+    """1 -> '1ST', 2 -> '2ND', 11 -> '11TH', 22 -> '22ND'."""
+    n = int(n)
+    suffix = "TH" if 10 <= n % 100 <= 20 else {1: "ST", 2: "ND", 3: "RD"}.get(n % 10, "TH")
+    return f"{n}{suffix}"
+
+
 def centred(d, box, text, f, fill):
     x0, y0, x1, y1 = box
     l, t, r, b = d.textbbox((0, 0), text, font=f)
@@ -88,27 +106,29 @@ def share_card():
             fill=(255, 255, 255, 220))
 
     last = [m for m in d.get("matches", []) if m.get("completed")]
-    nxt = next((m for m in d.get("matches", [])
-                if not m.get("completed") and not m.get("awaitingResult")), None)
+    nxt = next((m for m in d.get("matches", []) if not m.get("completed")
+                and not m.get("awaitingResult") and not m.get("postponed")), None)
     proj = d.get("projection") or {}
 
     if last:
         m = last[-1]
         verb = {"W": "WON", "L": "LOST", "D": "DREW"}.get(m.get("result"), "")
         where = "AT" if not m.get("home") else "V"
-        line = f"{verb} {m['us']}-{m['them']} {where} {m['opponent'].upper()}"
-        d_.text((72, 252), line[:34], font=font(BLACK, 62), fill=(255, 255, 255))
+        score = f"{m['us']}-{m['them']}"
+        if m.get("pens"):                 # level after extra time: say how it was decided
+            score = f"ON PENS {m['pens']}"
+        line = f"{verb} {score} {where} {m['opponent'].upper()}"
+        d_.text((72, 252), line, font=fitted(d_, line, BLACK, 62, W - 144), fill=(255, 255, 255))
 
     if nxt:
         when = datetime.fromisoformat(nxt["date"]).astimezone(
             ZoneInfo("Europe/London")).strftime("%a %-d %b, %H:%M")
         d_.text((72, 372), "NEXT", font=font(BOLD, 24), fill=(255, 209, 102))
-        d_.text((72, 408), f"{nxt['opponent'].upper()} "
-                           f"({'H' if nxt.get('home') else 'A'}) · {when} UK",
-                font=font(BOLD, 34), fill=(255, 255, 255))
+        nline = f"{nxt['opponent'].upper()} ({'H' if nxt.get('home') else 'A'}) · {when} UK"
+        d_.text((72, 408), nline, font=fitted(d_, nline, BOLD, 34, W - 144), fill=(255, 255, 255))
 
     if proj:
-        d_.text((72, 496), f"{proj.get('rank','')}TH IN THE TABLE · "
+        d_.text((72, 496), f"{ordinal(proj['rank']) if proj.get('rank') else ''} IN THE TABLE · "
                            f"{proj.get('points','')} PTS · {proj.get('played','')} PLAYED",
                 font=font(BOLD, 26), fill=(255, 255, 255, 220))
 

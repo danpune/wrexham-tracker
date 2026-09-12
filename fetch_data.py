@@ -70,6 +70,40 @@ def rfc822(s):
 # --- fixtures & results -------------------------------------------------------
 # ESPN's team/schedule endpoint only returns matches already played, so walk the
 # league scoreboard month by month and filter. 11 requests, cheap, complete.
+# Not played, whatever the clock says. ESPN leaves these completed=false with the
+# original kickoff in the past -- which the "ESPN is late flipping full time" rule
+# would otherwise read as a finished match awaiting its score.
+NOT_PLAYED = {"STATUS_POSTPONED", "STATUS_CANCELED", "STATUS_ABANDONED", "STATUS_SUSPENDED"}
+
+
+def match_state(status, kickoff, now):
+    """(completed, awaitingResult, postponed) for one ESPN status.type."""
+    postponed = status.get("name") in NOT_PLAYED
+    done = bool(status.get("completed")) and not postponed
+    # ESPN can lag ~1h+ past full time before flipping completed. Treat a
+    # long-past kickoff as no longer upcoming so the UI doesn't count down to a
+    # match that has finished -- but never a postponed one.
+    stale = not done and not postponed and now - kickoff > timedelta(hours=2.5)
+    return done, stale, postponed
+
+
+def result_of(us, them):
+    """('W'|'L'|'D', pens) from two ESPN competitors. pens is 'us-them' or None.
+
+    A cup tie level after extra time is decided on penalties: ESPN keeps the
+    score level and marks the shootout winner, so comparing goals alone called
+    it a draw.
+    """
+    a, b = int(us.get("score") or 0), int(them.get("score") or 0)
+    if a != b:
+        return ("W" if a > b else "L"), None
+    su, st = us.get("shootoutScore"), them.get("shootoutScore")
+    if su is None and st is None:
+        return "D", None
+    won = us.get("winner") if us.get("winner") is not None else (su or 0) > (st or 0)
+    return ("W" if won else "L"), f"{int(su or 0)}-{int(st or 0)}"
+
+
 def fetch_matches(league_form=None, league_all=None):
     """league_form, if given, is filled with {team_id: [results]} for every club
     from the same scoreboard responses — the table's Form column costs no extra
@@ -131,18 +165,11 @@ def fetch_matches(league_form=None, league_all=None):
             us = next(t for t in teams if t["team"]["id"] == TEAM_ID)
             them = next(t for t in teams if t["team"]["id"] != TEAM_ID)
             status = comp.get("status", {}).get("type", {})
-            done = status.get("completed", False)
-            # ESPN can lag ~1h+ past full time before flipping this. Treat a
-            # long-past kickoff as no longer upcoming so the UI doesn't count
-            # down to a match that has finished.
             kickoff = datetime.fromisoformat(iso(ev["date"]))
-            stale = (not done and
-                     datetime.now(timezone.utc) - kickoff > timedelta(hours=2.5))
+            done, stale, postponed = match_state(status, kickoff, datetime.now(timezone.utc))
             us_score = int(us.get("score") or 0) if done else None
             them_score = int(them.get("score") or 0) if done else None
-            result = None
-            if done:
-                result = "W" if us_score > them_score else "L" if us_score < them_score else "D"
+            result, pens = result_of(us, them) if done else (None, None)
             out.append({
                 "id": ev["id"],
                 "league": league,
@@ -156,9 +183,11 @@ def fetch_matches(league_form=None, league_all=None):
                 "venue": comp.get("venue", {}).get("fullName", ""),
                 "completed": done,
                 "awaitingResult": stale,
+                "postponed": postponed,
                 "us": us_score,
                 "them": them_score,
                 "result": result,
+                "pens": pens,
             })
     out.sort(key=lambda m: m["date"])
     try:
@@ -335,8 +364,8 @@ def fetch_odds(matches, lookahead=5):
     to read from it. Add it here if that changes.
     """
     odds = {}
-    upcoming = [m for m in matches
-                if not m["completed"] and not m.get("awaitingResult")][:lookahead]
+    upcoming = [m for m in matches if not m["completed"] and not m.get("awaitingResult")
+                and not m.get("postponed")][:lookahead]
     for m in upcoming:
         day = m["date"][:10]
         term = urllib.parse.quote(m["opponent"].split()[0] + " Wrexham")
@@ -458,7 +487,7 @@ def fetch_summary(matches):
                 f"Wrexham {m['opponent']} highlights"),
             "match": {"opponent": m["opponent"], "logo": m["logo"], "home": m["home"],
                       "us": m["us"], "them": m["them"], "date": m["date"],
-                      "comp": m["comp"], "result": m["result"]},
+                      "comp": m["comp"], "result": m["result"], "pens": m.get("pens")},
             **det}
 
 
@@ -554,9 +583,9 @@ def fetch_weather(city, when):
 def next_match(matches):
     """The same two-step rule the page uses, so the fetcher cannot pick a
     different fixture and pin its venue, weather and TV to another match."""
-    return (next((m for m in matches
-                  if not m["completed"] and not m.get("awaitingResult")), None)
-            or next((m for m in matches if not m["completed"]), None))
+    return (next((m for m in matches if not m["completed"] and not m.get("awaitingResult")
+                  and not m.get("postponed")), None)
+            or next((m for m in matches if not m["completed"] and not m.get("postponed")), None))
 
 
 def fetch_next_info(matches):
@@ -660,7 +689,9 @@ def write_ics(matches):
     os.makedirs(icsdir, exist_ok=True)
     keep, feed = set(), []
     for m in matches:
-        if m["completed"] or m.get("awaitingResult"):
+        # A postponed fixture has no date yet. Leaving the old one in a subscribed
+        # calendar is wrong; it comes back when ESPN reschedules it.
+        if m["completed"] or m.get("awaitingResult") or m.get("postponed"):
             continue
         try:
             ev = vevent(m)

@@ -11,6 +11,7 @@ Merge-only and fail-safe: never removes entries, exits 0 on any fetch failure.
 Runs in CI after fetch_data.py. Standard library only, no API key.
 """
 import json, os, re, sys, urllib.parse, urllib.request
+from datetime import datetime, timedelta
 
 DIR = os.path.dirname(os.path.abspath(__file__))
 # Official rights-holding channels. The club's handle is @WxmAFCofficial -- NOT
@@ -174,7 +175,7 @@ ALIASES = {
 }
 
 
-def matches_title(a, b, title, cup=False):
+def matches_title(a, b, title, cup=False, near=False):
     """True when the title is a highlights upload naming BOTH of these clubs.
 
     Requiring both names is what kills the West Ham / West Bromwich collision --
@@ -194,11 +195,16 @@ def matches_title(a, b, title, cup=False):
     if re.search(r"\bwomen'?s?\b|\bu\d\d'?s?\b|under-?\d\d|academy|\bdevelopment\b"
                  r"|pre-?season|friendly|\bpl2\b|premier league 2", t):
         return False
-    # A cup tie and a league game between the same clubs look identical by name,
-    # so the competition has to agree with the fixture both ways: a league game
-    # rejects cup titles, and a cup tie rejects titles that don't name a cup.
-    # (Every first-team Wrexham cup-tie upload found names its competition.)
-    if bool(re.search(r"carabao|league cup|efl cup|\bfa cup\b|emirates fa|trophy", t)) != cup:
+    # A cup tie and a league game between the same clubs look identical by name.
+    # A league fixture never takes a clip that names a cup. A cup tie only needs
+    # the cup named when it is actually ambiguous -- the same clubs also meet
+    # within a fortnight (`near`). Demanding it always rejected most genuine cup
+    # uploads: "HIGHLIGHTS | Preston North End vs Wrexham AFC" was a Carabao Cup
+    # tie, and 18 of 31 real Wrexham cup-tie clips name no competition at all.
+    named = bool(re.search(r"carabao|league cup|efl cup|\bfa cup\b|emirates fa|trophy", t))
+    if named and not cup:
+        return False
+    if cup and near and not named:
         return False
     return _names(a, t) and _names(b, t)
 
@@ -278,18 +284,26 @@ def main():
     # Every completed league fixture, not just Wrexham's -- @theEFL uploads
     # highlights for the whole division, so the same scrape covers all 24 clubs.
     # Newest first, so a fixture maps to the newest matching upload.
+    def near_other(m):
+        """Do Wrexham meet this opponent again within 14 days (either side)?"""
+        t = datetime.fromisoformat(m["date"])
+        return any(o["id"] != m["id"] and o["opponent"] == m["opponent"]
+                   and abs(datetime.fromisoformat(o["date"]) - t) <= timedelta(days=14)
+                   for o in data["matches"])
+
     fixtures = []
     for m in data["matches"]:
         if m["completed"]:
+            cup = m.get("comp", "League") != "League"
             fixtures.append((m["id"], "Wrexham", m["opponent"], m["date"],
-                             m.get("comp", "League") != "League"))
+                             cup, cup and near_other(m)))
     try:
         lg = json.load(open(os.path.join(DIR, "league.json")))
         names = {k: v["n"] for k, v in lg["teams"].items()}
         for m in lg["matches"]:
             if m["c"] and m["i"] not in {f[0] for f in fixtures}:
                 fixtures.append((m["i"], names.get(m["h"], ""), names.get(m["a"], ""),
-                                 m["d"], False))
+                                 m["d"], False, False))
     except (OSError, ValueError, KeyError):
         pass
     fixtures.sort(key=lambda f: f[3], reverse=True)
@@ -298,7 +312,7 @@ def main():
     # an earlier run be attached again to a second fixture.
     used = {v["yt"] for v in hl.values()}
     added = 0
-    for mid, ha, ab, when, cup in fixtures:
+    for mid, ha, ab, when, cup, near in fixtures:
         if mid in hl or not (ha and ab):
             continue
         # /videos only holds ~2 days of uploads and carries no dates. An older
@@ -308,7 +322,7 @@ def main():
         if played is None or played > 3:
             continue
         for vid, title in videos:
-            if vid in used or not matches_title(ha, ab, title, cup) or not official(vid):
+            if vid in used or not matches_title(ha, ab, title, cup, near) or not official(vid):
                 continue
             hl[mid] = {"yt": vid, "title": title, "teams": [ha, ab]}
             used.add(vid)
@@ -323,7 +337,7 @@ def main():
     misses = doc.setdefault("misses", {})
     todo = [f for f in fixtures
             if f[0] not in hl and f[1] and f[2] and misses.get(f[0], 0) < 3]
-    for mid, ha, ab, when, cup in todo[:MAX_SEARCHES]:
+    for mid, ha, ab, when, cup, near in todo[:MAX_SEARCHES]:
         played = age_days_since(when)
         found = None
         where = ["@theEFL", "@cbssportsgolazo",
@@ -337,7 +351,7 @@ def main():
             except Exception as e:        # a 429 on one channel keeps the rest
                 print(f"  search {ch}: {type(e).__name__}", file=sys.stderr)
         for vid, title, pub in results:
-            if vid in used or not matches_title(ha, ab, title, cup):
+            if vid in used or not matches_title(ha, ab, title, cup, near):
                 continue
             # Not a different season, not the reverse fixture, and not an
             # earlier cup tie between the same clubs.

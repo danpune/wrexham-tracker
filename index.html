@@ -131,9 +131,10 @@ td.own:focus-visible{outline:2px solid var(--red);outline-offset:-2px}
 .count.soon b{font-size:44px}
 .count.live b{color:var(--w)}
 .cdtag{display:inline-block;font-size:10px;font-weight:800;letter-spacing:.7px;
-  text-transform:uppercase;color:#fff;background:var(--red);border-radius:999px;
+  text-transform:uppercase;color:#fff;background:var(--pill-l);border-radius:999px;
   padding:3px 9px;vertical-align:3px;margin-left:2px}
 .cdtag.tmr{background:var(--pill-d)}
+.pens{display:block;font-size:10px;font-weight:700;color:var(--mut);letter-spacing:.3px}
 .next-when{color:var(--red);font-size:13px;font-weight:600;margin-top:5px}
 
 /* form pills */
@@ -396,11 +397,12 @@ const dayKey    = (d, tz) => d.toLocaleDateString("en-CA", {timeZone: tz});
 // true when the chosen zone is on a different calendar day to the UK kickoff
 const spansDay  = d => dayKey(d, TZ) !== dayKey(d, "Europe/London");
 // short tag for the picked zone, so a row never shows two unlabelled clocks
-const tzShort = () => {
+// Takes the match date: "CDT" today can be "CST" by the time a December match kicks off.
+const tzShort = (at = new Date()) => {
   const city = TZ.split("/").pop().replace(/_/g, " ");
   try {
     const n = new Intl.DateTimeFormat("en-US", {timeZone: TZ, timeZoneName: "short"})
-      .formatToParts(new Date()).find(p => p.type === "timeZoneName").value;
+      .formatToParts(at).find(p => p.type === "timeZoneName").value;
     // en-US gives "CDT" for Chicago but "GMT+5:30" for Kolkata — prefer the city
     // name over a raw offset, which tells a reader nothing.
     return /^GMT/.test(n) ? city : n;
@@ -430,15 +432,21 @@ function tabs(){
       }
     document.querySelectorAll(".tab").forEach(x => x.setAttribute("aria-selected", x === t));
     document.querySelectorAll("main section").forEach(s => s.hidden = s.id !== t.dataset.p);
-    scrollTo({top: 0, behavior: "smooth"});
+    // On a phone the hero is taller than the screen, so jumping to the top of the
+    // page hid the tab just chosen. Bring the tab bar to the top instead -- when
+    // scrolled past it, or when the content would start below the screen. On a
+    // desktop the content is already in view, so nothing moves.
+    const mainTop = document.querySelector("main").getBoundingClientRect().top;
+    const barTop = mainTop + scrollY - document.querySelector("nav").offsetHeight;
+    if (scrollY > barTop || mainTop > innerHeight - 120) scrollTo({top: barTop, behavior: "smooth"});
     };
   });
 }
 
 // One definition of "next", shared by the hero and the fixtures list, so they
 // cannot disagree when ESPN is late marking a match complete.
-const nextMatch = d => d.matches.find(m => !m.completed && !m.awaitingResult)
-                    || d.matches.find(m => !m.completed);
+const nextMatch = d => d.matches.find(m => !m.completed && !m.awaitingResult && !m.postponed)
+                    || d.matches.find(m => !m.completed && !m.postponed);
 
 function hero(d){  // d used for nextInfo below
   const played = d.matches.filter(m => m.completed);
@@ -449,7 +457,8 @@ function hero(d){  // d used for nextInfo below
     $("#last").innerHTML = `<h2>Last result</h2>
       <div class="sline">
         <img class="crest" src="${esc(wxLogo)}" alt="" loading="lazy">
-        <div class="score" style="color:var(${cls})">${last.us}&ndash;${last.them}</div>
+        <div class="score" style="color:var(${cls})">${last.us}&ndash;${last.them}${
+          last.pens ? `<span class="pens">${esc(last.pens)} pens</span>` : ""}</div>
         <img class="crest" src="${esc(last.logo)}" alt="" loading="lazy">
       </div>
       <div class="opp"><span class="vs">${last.home ? "vs" : "away at"}</span> ${esc(last.opponent)}
@@ -525,11 +534,13 @@ function fixtures(d){
     if (mn !== month){ html += `<div class="mnth">${mn}</div>`; month = mn; }
     const isNext = m === nextMatch(d);
     const right = m.completed
-      ? `<div class="mres" style="color:var(--${m.result === "W" ? "w" : m.result === "L" ? "l" : "d"})">${m.us}&ndash;${m.them}</div>`
+      ? `<div class="mres" style="color:var(--${m.result === "W" ? "w" : m.result === "L" ? "l" : "d"})">${m.us}&ndash;${m.them}${
+          m.pens ? `<span class="pens">${esc(m.pens)} pens</span>` : ""}</div>`
+      : m.postponed ? `<div class="mtag" style="color:var(--mut)">Postponed</div>`
       : m.awaitingResult ? `<div class="mtag" style="color:var(--mut)">Full time</div>`
       : isNext ? `<div class="mtag">Next</div>`
       : `<div class="mtime">${ukTime(dt)}
-           ${TZ !== "Europe/London" ? `<span class="mlocal">${localTime(dt)}${spansDay(dt) ? " " + esc(localDay(dt).split(" ")[0]) : ""} ${esc(tzShort())}</span>` : ""}</div>`;
+           ${TZ !== "Europe/London" ? `<span class="mlocal">${localTime(dt)}${spansDay(dt) ? " " + esc(localDay(dt).split(" ")[0]) : ""} ${esc(tzShort(dt))}</span>` : ""}</div>`;
     html += `<div class="mrow${isNext ? " is-next" : ""}">
       <div class="mdate"><b>${ukDayNo(dt)}</b>${ukDay(dt)}</div>
       <img class="crest" src="${esc(m.logo)}" alt="" loading="lazy">
@@ -538,7 +549,7 @@ function fixtures(d){
       ${right}
       ${m.completed
           ? (m.yt ? `<a class="cal hl" href="https://www.youtube.com/watch?v=${esc(m.yt)}" target="_blank" rel="noopener noreferrer" aria-label="Watch ${esc(m.opponent)} highlights">&#127916;</a>` : "")
-          : m.awaitingResult ? ""
+          : m.awaitingResult || m.postponed ? ""
           : `<a class="cal" href="ics/${esc(m.id)}.ics" aria-label="Add ${esc(m.opponent)} match to your calendar">+ Cal</a>`}</div>`;
   }
   $("#fixtures").innerHTML = html;
@@ -739,7 +750,7 @@ function centre(d){
         search: ytSearch(ourName, oppName),
         match: {opponent: oppName, logo: oppId ? crest(oppId) : m.logo,
                 ourLogo: crest(team), ourName,
-                home, us, them, date: iso, comp: m.comp || "League",
+                home, us, them, date: iso, comp: m.comp || "League", pens: m.pens,
                 result: us > them ? "W" : us < them ? "L" : "D"},
         // Cup ties aren't in league.json, so there's no opponent id to hand;
         // the archive entry is keyed by both clubs' ids, so take the other one.
@@ -795,7 +806,7 @@ function renderMatch(d, L){
     <div class="mc-head">
       <div class="mc-side"><img class="crest lg" src="${esc(ourLogo)}" alt="" loading="lazy"><span>${esc(ourName)}</span></div>
       <div class="mc-score" style="color:var(--${m.result === "W" ? "w" : m.result === "L" ? "l" : "d"})">
-        ${m.us}&ndash;${m.them}</div>
+        ${m.us}&ndash;${m.them}${m.pens ? `<span class="pens">${esc(m.pens)} pens</span>` : ""}</div>
       <div class="mc-side"><img class="crest lg" src="${esc(m.logo)}" alt="" loading="lazy"><span>${esc(m.opponent)}</span></div>
     </div>
     ${timeline}
@@ -816,7 +827,7 @@ function renderMatch(d, L){
 }
 
 function odds(d){
-  const rows = d.matches.filter(m => !m.completed && !m.awaitingResult && d.odds[m.date.slice(0,10)]).slice(0, 5).map(m => {
+  const rows = d.matches.filter(m => !m.completed && !m.awaitingResult && !m.postponed && d.odds[m.date.slice(0,10)]).slice(0, 5).map(m => {
     const o = d.odds[m.date.slice(0,10)], b = o.book;
     const sum = b.wrexham + b.draw + b.opponent;   // 3 binaries: prices carry spread, so > 1
     const seg = (v, c) => `<i style="width:${(v/sum*100).toFixed(1)}%;background:${c}"></i>`;
@@ -834,7 +845,9 @@ function odds(d){
   }).join("");
   return (rows || `<div class="card"><div class="note" style="margin:0">No live markets for the
     next fixtures yet. Polymarket usually lists a Championship match a few days out.</div></div>`) +
-    `<div class="note">Prices are live Polymarket markets &mdash; what people are actually betting, not a model.
+    `<div class="note">Polymarket&rsquo;s quoted prices, checked ${esc(ago(d.updated))} &mdash; the middle of each
+     market&rsquo;s order book, refreshed about every half hour. These markets trade thinly until near
+     kickoff, so read them as a market-maker&rsquo;s estimate rather than a crowd&rsquo;s verdict. Not a model.
      Each of the three outcomes is its own contract, so the percentages may not sum to exactly 100%.<br>
      Kalshi lists these same fixtures but every contract is currently quoteless &mdash; no bid, ask or open
      interest &mdash; so there is nothing to show from it.<br>
