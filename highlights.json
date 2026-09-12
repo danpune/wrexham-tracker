@@ -564,6 +564,46 @@
     "Derby County",
     "Birmingham City"
    ]
+  },
+  "401880264": {
+   "yt": "dj9qNcBIvyQ",
+   "title": "Middlesbrough vs. Norwich City: Extended Highlights | EFL Championship | CBS Sports Golazo",
+   "teams": [
+    "Middlesbrough",
+    "Norwich City"
+   ]
+  },
+  "401880260": {
+   "yt": "6VdQo0Bq8OY",
+   "title": "Swansea City vs. Burnley: Extended Highlights | EFL Championship | CBS Sports Golazo",
+   "teams": [
+    "Swansea City",
+    "Burnley"
+   ]
+  },
+  "401880266": {
+   "yt": "dh3YexoSBfY",
+   "title": "HIGHLIGHTS | Charlton 0 Portsmouth 0",
+   "teams": [
+    "Charlton Athletic",
+    "Portsmouth"
+   ]
+  },
+  "401880261": {
+   "yt": "S2Lv_TWqxPU",
+   "title": "Southampton 4-1 Bristol City | Highlights",
+   "teams": [
+    "Southampton",
+    "Bristol City"
+   ]
+  },
+  "401880259": {
+   "yt": "hJ3PQiGoNUg",
+   "title": "Watford 1-2 Stoke City | Short Highlights",
+   "teams": [
+    "Watford",
+    "Stoke City"
+   ]
   }
  },
  "misses": {
@@ -577,7 +617,9 @@
   "401880273": 1,
   "401880279": 1,
   "401880278": 1,
-  "401880267": 2,
-  "401880258": 2
+  "401880267": 3,
+  "401880258": 3,
+  "401880268": 1,
+  "401880263": 1
  }
 }
