@@ -145,6 +145,25 @@ def test_title_traps_from_review():
     # ...but it is exactly what a cup fixture needs
     assert ok("Southampton", "West Ham United",
               "HIGHLIGHTS: Southampton 1-4 West Ham | Carabao Cup", cup=True)
+    assert ok("Middlesbrough", "Wrexham",
+              "DREAM DEBUT! | Middlesbrough v Wrexham Carabao Cup Extended Highlights", cup=True)
+    # and a league clip between the same clubs is not the cup tie
+    assert not ok("Swansea City", "Wrexham", "HIGHLIGHTS | Swansea City vs Wrexham AFC", cup=True)
+    assert not ok("Swansea City", "Cardiff City", "DEVELOPMENT HIGHLIGHTS: SWANSEA CITY 1-2 CARDIFF CITY")
+
+
+def test_compact_ages():
+    """YouTube also writes '7d ago' / '3w ago' / '10mo ago'. Unread, they were rejects."""
+    import build_highlights as h
+    assert h.age_days("7d ago") == 7
+    assert h.age_days("3w ago") == 21
+    assert h.age_days("10mo ago") == 300
+    assert h.age_days("1y ago") == 365
+    assert h.age_days("5 minutes ago") == 0
+    assert h.age_days("1 month ago") == 30
+    assert h.posted_after_match("7d ago", 7)
+    assert h.posted_after_match("7 days ago", 7)
+    assert not h.posted_after_match("10mo ago", 7)
 
 
 if __name__ == "__main__":

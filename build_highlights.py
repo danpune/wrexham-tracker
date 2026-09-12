@@ -76,10 +76,28 @@ UNITS = {"second": 0, "minute": 0, "hour": 0, "day": 1,
          "week": 7, "month": 30, "year": 365}
 
 
+def _ago(published):
+    """'2 weeks ago' or '2w ago' -> (2, 'week'). None when there is nothing to read.
+
+    YouTube answers in either form; reading only the long one silently rejected
+    correct videos, and with misses capped a few compact replies abandoned a
+    fixture for good.
+    """
+    m = re.search(r"(\d+)\s*(mo|months?|y|yrs?|years?|w|wks?|weeks?|d|days?"
+                  r"|h|hrs?|hours?|m|mins?|minutes?|s|secs?|seconds?)\s+ago", published or "")
+    if not m:
+        return None
+    u = m.group(2)
+    unit = ("month" if u.startswith("mo") else "year" if u[0] == "y" else
+            "week" if u[0] == "w" else "day" if u[0] == "d" else
+            "hour" if u[0] == "h" else "minute" if u[0] == "m" else "second")
+    return int(m.group(1)), unit
+
+
 def age_days(published):
     """'2 weeks ago' -> 14. None when YouTube gave us nothing to read."""
-    m = re.search(r"(\d+)\s+(second|minute|hour|day|week|month|year)s?\s+ago", published or "")
-    return int(m.group(1)) * UNITS[m.group(2)] if m else None
+    a = _ago(published)
+    return a[0] * UNITS[a[1]] if a else None
 
 
 def posted_after_match(published, played):
@@ -93,11 +111,11 @@ def posted_after_match(published, played):
     YouTube floors ages to its unit ("2 weeks" is 14-20 days), so the upper
     edge of the window widens by one unit.
     """
-    m = re.search(r"(\d+)\s+(second|minute|hour|day|week|month|year)s?\s+ago", published or "")
-    if not m or played is None:
+    a = _ago(published)
+    if not a or played is None:
         return False
-    age = int(m.group(1)) * UNITS[m.group(2)]
-    unit = max(1, UNITS[m.group(2)])
+    age = a[0] * UNITS[a[1]]
+    unit = max(1, UNITS[a[1]])
     return age <= played + 1 and played - age <= unit + 3
 
 
@@ -173,12 +191,14 @@ def matches_title(a, b, title, cup=False):
         return False
     # Trusted club channels also post their women's, academy and pre-season
     # games against the same opponents, every week. Not the first team.
-    if re.search(r"\bwomen'?s?\b|\bu\d\d'?s?\b|under-?\d\d|academy|development squad"
+    if re.search(r"\bwomen'?s?\b|\bu\d\d'?s?\b|under-?\d\d|academy|\bdevelopment\b"
                  r"|pre-?season|friendly|\bpl2\b|premier league 2", t):
         return False
-    # A cup tie between two league opponents looks identical by name. Cup words
-    # only disqualify a league fixture -- Wrexham's own cup ties need them.
-    if not cup and re.search(r"carabao|league cup|\bfa cup\b|emirates fa|trophy", t):
+    # A cup tie and a league game between the same clubs look identical by name,
+    # so the competition has to agree with the fixture both ways: a league game
+    # rejects cup titles, and a cup tie rejects titles that don't name a cup.
+    # (Every first-team Wrexham cup-tie upload found names its competition.)
+    if bool(re.search(r"carabao|league cup|efl cup|\bfa cup\b|emirates fa|trophy", t)) != cup:
         return False
     return _names(a, t) and _names(b, t)
 
