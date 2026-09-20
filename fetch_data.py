@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Build data.json for the Wrexham tracker from free public feeds (no API keys)."""
 
-import calendar, json, os, re, time, urllib.parse, urllib.request, xml.etree.ElementTree as ET
+import json, os, re, time, urllib.parse, urllib.request, xml.etree.ElementTree as ET
 from datetime import datetime, timedelta, timezone
 from email.utils import parsedate_to_datetime
 from html import unescape
@@ -115,9 +115,13 @@ def fetch_matches(league_form=None, league_all=None):
     out = []
     for league, comp_name in COMPETITIONS:
       for year, month in SEASON_MONTHS:
-        last = calendar.monthrange(year, month)[1]
+        # ESPN stopped accepting a date RANGE here in Sept 2026: any
+        # "YYYYMMDD-YYYYMMDD" now answers 400 "Failed to get events endpoint",
+        # which fetched 0 fixtures and tripped the truncated-season guard on
+        # every run for five days. The bare "YYYYMM" form returns the whole
+        # month and costs the same one request.
         url = (f"https://site.api.espn.com/apis/site/v2/sports/soccer/{league}/scoreboard"
-               f"?dates={year}{month:02d}01-{year}{month:02d}{last}")
+               f"?dates={year}{month:02d}")
         try:
             data = get(url, as_json=True)
         except Exception:
