@@ -52,12 +52,11 @@ dependencies, no external fonts.
 
 ## Refresh trigger
 
-The repo's own `schedule` has never fired (GitHub does not always start crons on a
-brand-new repo). Until it does, `update.yml` also accepts a `repository_dispatch` of
-type `refresh`, and the tennis tracker's proven 30-minute cron pings it. That needs a
-fine-grained PAT with **Contents: read and write** on this repo, stored as the
-`WXM_DISPATCH` secret in `danpune/tennis-slams-tracker`. With no secret set the ping
-step skips and neither project is affected.
+`update.yml`'s own `schedule` (`13,43 * * * *`) has fired on its own since 29 August 2026.
+GitHub throttles low-traffic crons, so in practice runs start every few hours rather than
+every 30 minutes. The stop-gap ping from the tennis tracker's cron (and its `WXM_DISPATCH`
+secret) has been removed now the schedule is reliable; `update.yml` still accepts a
+`repository_dispatch` of type `refresh` if an external kick is ever needed again.
 
 Kick a refresh by hand any time:
 
