@@ -48,5 +48,18 @@ jobs:
           git config user.email "actions@users.noreply.github.com"
           git add -A data.json league.json archive highlights.json ics preview.jpg
           git diff --staged --quiet || git commit -m "Update data $(date -u +%FT%TZ)"
-          git pull --rebase origin main
-          git push
+          # GitHub occasionally answers a push with "fatal error in commit_refs"
+          # (1 run in 30). The data is fine and the next cron would carry it, but
+          # the failed run emails the owner, which trains them to ignore the
+          # alerts that matter. Re-rebase each try: the retry may be racing a
+          # push that landed in between.
+          for i in 1 2 3; do
+            if git pull --rebase origin main && git push; then
+              exit 0
+            fi
+            echo "push attempt $i failed; retrying in $((i * 15))s"
+            git rebase --abort 2>/dev/null || true
+            sleep $((i * 15))
+          done
+          echo "push failed three times — this is not a blip"
+          exit 1
