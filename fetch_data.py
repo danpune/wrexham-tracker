@@ -17,11 +17,25 @@ LOGO = "https://a.espncdn.com/i/teamlogos/soccer/500/%s.png"
 SEASON_MONTHS = [(2026, m) for m in (8, 9, 10, 11, 12)] + [(2027, m) for m in range(1, 7)]
 PLAYOFF_CUTOFF = 72      # historical 6th-place points, Championship. Used for the projection.
 MIN_GAMES_TO_PROJECT = 8
+MAX_POD_AGE_D = 60        # a show that has not published in two months is dormant
 TOTAL_TEAMS = 24          # a Championship season: 24 clubs, 46 games each
 TOTAL_GAMES = 46
 
 NEWS_FEED = ("https://news.google.com/rss/search?"
              "q=%22Wrexham+AFC%22+OR+%22Wrexham%22+football&hl=en-GB&gl=GB&ceid=GB:en")
+
+# The query is deliberately wide, because narrowing it loses real coverage that
+# only ever says "Wrexham". The filtering happens here instead: a headline has
+# to name the club AND read as football. Without the second half the feed
+# carried the TOWN -- "Wrexham awaits shortlist decision in bid to become UK
+# City of Culture 2029" -- and without the first it carried division gossip
+# naming other clubs entirely.
+FOOTBALL_WORDS = re.compile(
+    r"\b(afc|fc|championship|efl|football|match|game|goals?|scor\w+|win|wins|won|draw|"
+    r"defeat|beat|loss|lose|lost|striker|midfielder|defender|keeper|manager|boss|squad|"
+    r"line-?up|team news|transfer|loan|sign\w+|injur\w+|penalty|kick-?off|fixtures?|"
+    r"promotion|relegation|play-?offs?|racecourse|cae ras|parkinson|red dragons|"
+    r"stadium|season|table|points|v|vs)\b", re.I)
 
 # (show, feed, max episodes to take)
 PODCASTS = [
@@ -295,7 +309,24 @@ MAX_PER_SOURCE = 3
 MAX_NEWS_AGE_H = 48
 
 
-def fetch_news(limit=40):
+def is_club_news(title, clubs):
+    """A headline is about Wrexham AFC, not the town of Wrexham.
+
+    `clubs` is this season's OTHER clubs, so "Wrexham news: West Brom loss
+    tough to take" survives on the opponent's name rather than needing an
+    ever-growing vocabulary. Wrexham's own name is filtered out here as well as
+    by the caller: left in, it matches every headline and the whole football
+    test collapses to "mentions Wrexham", which is what let the town's City of
+    Culture bid through.
+    """
+    if not re.search(r"\bwrexham\b", title, re.I):
+        return False
+    return bool(FOOTBALL_WORDS.search(title)
+                or any(c.lower() in title.lower() for c in clubs
+                       if len(c) > 3 and "wrexham" not in c.lower()))
+
+
+def fetch_news(limit=40, clubs=()):
     try:
         root = ET.fromstring(get(NEWS_FEED))
     except Exception:
@@ -315,7 +346,8 @@ def fetch_news(limit=40):
         })
     cutoff = datetime.now(timezone.utc) - timedelta(hours=MAX_NEWS_AGE_H)
     items = [i for i in items if i["published"] and i["url"]
-             and datetime.fromisoformat(i["published"]) >= cutoff]
+             and datetime.fromisoformat(i["published"]) >= cutoff
+             and is_club_news(i["title"], clubs)]
     items.sort(key=lambda i: i["published"], reverse=True)
     # One outlet covering the opponent's town shouldn't take an eighth of the
     # feed; cap each source so the list stays varied.
@@ -373,6 +405,11 @@ def fetch_podcasts(limit=20):
                 "url": safe_url(it.findtext("link")),
                 "published": published,
             })
+    # News has a 48h cutoff for exactly this reason. Without one here, a show
+    # that stopped publishing kept three slots filled with last season --
+    # including a preview of a club no longer in this division.
+    cutoff = datetime.now(timezone.utc) - timedelta(days=MAX_POD_AGE_D)
+    episodes = [e for e in episodes if datetime.fromisoformat(e["published"]) >= cutoff]
     episodes.sort(key=lambda e: e["published"], reverse=True)
     return episodes[:limit]
 
@@ -589,8 +626,11 @@ def fetch_weather(city, when):
     if not city:
         return None
     try:
+        # Every venue in this competition is in Great Britain. Without the
+        # filter, count=1 answers "Lincoln" with Lincoln, Nebraska -- which
+        # would have put Nebraskan weather on the Lincoln City away day.
         g = get("https://geocoding-api.open-meteo.com/v1/search?count=1&language=en"
-                "&name=" + urllib.parse.quote(city), as_json=True)
+                "&countryCode=GB&name=" + urllib.parse.quote(city), as_json=True)
         hit = (g.get("results") or [None])[0]
         if not hit:
             return None
@@ -768,7 +808,9 @@ def main():
         "competition": "EFL Championship",
         "matches": matches,
         "table": table,
-        "news": fetch_news() or previous.get("news", []),
+        "news": fetch_news(clubs=[n for i, t in league_all["teams"].items()
+                                  if i != TEAM_ID for n in (t["n"], t["s"])])
+                or previous.get("news", []),
         "podcasts": fetch_podcasts() or previous.get("podcasts", []),
         "projection": project(table, matches),
         "odds": fetch_odds(matches),

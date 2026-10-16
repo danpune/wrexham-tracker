@@ -456,7 +456,15 @@ function tabs(){
 
 // One definition of "next", shared by the hero and the fixtures list, so they
 // cannot disagree when ESPN is late marking a match complete.
-const nextMatch = d => d.matches.find(m => !m.completed && !m.awaitingResult && !m.postponed)
+// The fetcher marks a match "awaiting a result" 2.5h after kickoff, but data
+// lands only every few hours, so between full time and the next refresh the
+// page still said LIVE and offered "+ Cal" for a match already played. Apply
+// the same rule in the browser, where it re-evaluates on every tick.
+const FT_AFTER_MS = 9e6;        // 2.5h, the threshold fetch_data.match_state uses
+const over = m => m.awaitingResult
+  || (!m.completed && !m.postponed && Date.now() - new Date(m.date) > FT_AFTER_MS);
+
+const nextMatch = d => d.matches.find(m => !m.completed && !over(m) && !m.postponed)
                     || d.matches.find(m => !m.completed && !m.postponed);
 
 function hero(d){  // d used for nextInfo below
@@ -501,8 +509,8 @@ function hero(d){  // d used for nextInfo below
     ${d.nextInfo && d.nextInfo.weather ? `<div class="opp" style="margin-top:6px">${d.nextInfo.weather.icon} ${d.nextInfo.weather.temp}&deg;C ${esc(d.nextInfo.weather.label)}${d.nextInfo.venue ? " &middot; " + esc(d.nextInfo.venue) : ""}</div>` : ""}
     ${d.nextInfo && d.nextInfo.tv.length ? `<div class="opp">&#128250; ${d.nextInfo.tv.map(esc).join(", ")}</div>` : ""}
     ${d.nextInfo && d.nextInfo.h2h ? `<div class="opp" style="font-size:12px">${esc(d.nextInfo.h2h)}</div>` : ""}
-    <div>${next.awaitingResult ? "" : `<a class="olink" href="ics/${esc(next.id)}.ics">&#128197; Add to calendar</a>`}
-      <a class="olink" style="margin-left:22px" href="ics/wrexham.ics">Subscribe to all fixtures</a></div>`;
+    <div>${over(next) ? "" : `<a class="olink" href="ics/${esc(next.id)}.ics">&#128197; Add to calendar</a>`}
+      <a class="olink" style="margin-left:22px" href="webcal://danpune.github.io/wrexham-tracker/ics/wrexham.ics">Subscribe to all fixtures</a></div>`;
   clearTimeout(window.__cdiv); window.__cdiv = null;   // hero() can run again (tz change)
   let settled = false;
   // Precision follows how close it is: minutes are noise two days out, and the
@@ -511,7 +519,7 @@ function hero(d){  // d used for nextInfo below
   const ukDayKey = x => x.toLocaleDateString("en-CA", UK);
   const tick = () => {
     const el = $("#cd");
-    if (next.awaitingResult){ el.className = "count"; el.innerHTML = seg("FT", "full time"); settled = true; return; }
+    if (over(next)){ el.className = "count"; el.innerHTML = seg("FT", "full time"); settled = true; return; }
     const s = (dt - Date.now()) / 1000;
     if (s <= 0){
       el.className = "count live";
@@ -548,7 +556,7 @@ function fixtures(d){
       ? `<div class="mres" style="color:var(--${m.result === "W" ? "w" : m.result === "L" ? "l" : "d"})">${m.us}&ndash;${m.them}${
           m.pens ? `<span class="pens">${esc(m.pens)} pens</span>` : ""}</div>`
       : m.postponed ? `<div class="mtag" style="color:var(--mut)">Postponed</div>`
-      : m.awaitingResult ? `<div class="mtag" style="color:var(--mut)">Full time</div>`
+      : over(m) ? `<div class="mtag" style="color:var(--mut)">Full time</div>`
       : isNext ? `<div class="mtag">Next</div>`
       : `<div class="mtime">${ukTime(dt)}
            ${TZ !== "Europe/London" ? `<span class="mlocal">${localTime(dt)}${spansDay(dt) ? " " + esc(localDay(dt).split(" ")[0]) : ""} ${esc(tzShort(dt))}</span>` : ""}</div>`;
@@ -560,7 +568,7 @@ function fixtures(d){
       ${right}
       ${m.completed
           ? (m.yt ? `<a class="cal hl" href="https://www.youtube.com/watch?v=${esc(m.yt)}" target="_blank" rel="noopener noreferrer" aria-label="Watch ${esc(m.opponent)} highlights">&#127916;</a>` : "")
-          : m.awaitingResult || m.postponed ? ""
+          : over(m) || m.postponed ? ""
           : `<a class="cal" href="ics/${esc(m.id)}.ics" aria-label="Add ${esc(m.opponent)} match to your calendar">+ Cal</a>`}</div>`;
   }
   $("#fixtures").innerHTML = html;
@@ -841,7 +849,7 @@ function renderMatch(d, L){
 }
 
 function odds(d){
-  const rows = d.matches.filter(m => !m.completed && !m.awaitingResult && !m.postponed && d.odds[m.date.slice(0,10)]).slice(0, 5).map(m => {
+  const rows = d.matches.filter(m => !m.completed && !over(m) && !m.postponed && d.odds[m.date.slice(0,10)]).slice(0, 5).map(m => {
     const o = d.odds[m.date.slice(0,10)], b = o.book;
     const sum = b.wrexham + b.draw + b.opponent;   // 3 binaries: prices carry spread, so > 1
     const seg = (v, c) => `<i style="width:${(v/sum*100).toFixed(1)}%;background:${c}"></i>`;
@@ -1035,7 +1043,7 @@ function initTZ(d){
 fetch("data.json").then(r => r.json()).then(d => {
   $("#comp").textContent = d.competition + " " + d.season;
   const lg = d.matches.filter(m => m.comp === "League");   // cups don't belong in league progress
-  const done = lg.filter(m => m.completed || m.awaitingResult).length, total = lg.length;
+  const done = lg.filter(m => m.completed || over(m)).length, total = lg.length;
   $("#prog").textContent = `${done} played \u00b7 ${total - done} to go`;
   const res = lg.filter(m => m.completed && m.result).map(m => m.result);
   let streak = "";

@@ -260,6 +260,28 @@ def test_abandoned_is_not_a_league_result():
     assert f.match_state({"name": "STATUS_FULL_TIME", "completed": True}, past, now)[0] is True
 
 
+
+def test_is_club_news():
+    """The feed carried the TOWN of Wrexham and division gossip naming other
+    clubs. A headline has to name the club and read as football."""
+    # Wrexham is deliberately in this list: left unfiltered it matches every
+    # headline and the football test collapses to "mentions Wrexham", which is
+    # exactly how the town's City of Culture bid got through.
+    clubs = ["Wrexham", "West Bromwich Albion", "West Brom", "Charlton Athletic",
+             "Preston North End"]
+    keep = lambda t: f.is_club_news(t, clubs)
+    assert not keep("Wrexham awaits shortlist decision in bid to become UK City of Culture 2029")
+    assert not keep("Wrexham council approves new bin collection schedule")
+    # names another club but not Wrexham: division gossip, not our news
+    assert not keep("Steven Gerrard open to huge Championship job as manager under pressure")
+    assert not keep("Championship news, transfer latest and gossip plus EFL updates")
+    assert keep("Wrexham to batten down hatches after defeat - Phil Parkinson")
+    assert keep("MATCH PREVIEW | Charlton v Wrexham")
+    assert keep("Wrexham AFC announce changes to matchday traffic arrangements at Cae Ras")
+    # survives on the opponent's name, not on football vocabulary
+    assert keep("Wrexham news: West Brom loss tough to take - Hyam")
+
+
 if __name__ == "__main__":
     for name, fn in list(globals().items()):
         if name.startswith("test_") and callable(fn):
