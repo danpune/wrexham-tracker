@@ -232,6 +232,34 @@ def test_near_cup_clip_does_not_reach_league_game():
     assert only_cup.get("cup", {}).get("yt") == "BAREcup0001"
 
 
+
+def test_blank_score_is_not_a_draw():
+    """ESPN marking a match complete without a score must not become 0-0."""
+    from datetime import datetime, timedelta, timezone
+    now = datetime(2026, 10, 16, 12, 0, tzinfo=timezone.utc)
+    past = now - timedelta(hours=6)
+    st = {"name": "STATUS_FULL_TIME", "completed": True}
+    done, stale, postponed = f.match_state(st, past, now)
+    assert (done, stale, postponed) == (True, False, False)
+    # the rule main() applies on top of match_state
+    blank = lambda a, b: not all(str(t.get("score", "")).strip().isdigit()
+                                 for t in ({"score": a}, {"score": b}))
+    assert blank("", "1") and blank(None, None) and blank("2", " ")
+    assert not blank("0", "0") and not blank("2", "1")
+
+
+def test_abandoned_is_not_a_league_result():
+    """ESPN marks an abandoned tie completed; the league-wide loops must agree
+    with Wrexham's own row and exclude it, or Form and the table disagree."""
+    from datetime import datetime, timedelta, timezone
+    now = datetime(2026, 10, 16, 12, 0, tzinfo=timezone.utc)
+    past = now - timedelta(hours=6)
+    for name in ("STATUS_ABANDONED", "STATUS_POSTPONED", "STATUS_CANCELED", "STATUS_SUSPENDED"):
+        done, _, postponed = f.match_state({"name": name, "completed": True}, past, now)
+        assert done is False and postponed is True, name
+    assert f.match_state({"name": "STATUS_FULL_TIME", "completed": True}, past, now)[0] is True
+
+
 if __name__ == "__main__":
     for name, fn in list(globals().items()):
         if name.startswith("test_") and callable(fn):

@@ -54,12 +54,23 @@ jobs:
           # alerts that matter. Re-rebase each try: the retry may be racing a
           # push that landed in between.
           for i in 1 2 3; do
-            if git pull --rebase origin main && git push; then
+            if ! git pull --rebase origin main; then
+              stage="pull --rebase"
+            elif git push; then
               exit 0
+            else
+              stage="push"
             fi
-            echo "push attempt $i failed; retrying in $((i * 15))s"
             git rebase --abort 2>/dev/null || true
-            sleep $((i * 15))
+            # Name the stage that failed: "push failed" while the PULL was the
+            # problem misleads exactly when someone is diagnosing. And do not
+            # announce a retry after the last attempt.
+            if [ "$i" -lt 3 ]; then
+              echo "$stage failed (attempt $i/3); retrying in $((i * 15))s"
+              sleep $((i * 15))
+            else
+              echo "$stage failed on the final attempt"
+            fi
           done
-          echo "push failed three times — this is not a blip"
+          echo "$stage failed three times — this is not a blip"
           exit 1

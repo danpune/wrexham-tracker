@@ -17,6 +17,7 @@ LOGO = "https://a.espncdn.com/i/teamlogos/soccer/500/%s.png"
 SEASON_MONTHS = [(2026, m) for m in (8, 9, 10, 11, 12)] + [(2027, m) for m in range(1, 7)]
 PLAYOFF_CUTOFF = 72      # historical 6th-place points, Championship. Used for the projection.
 MIN_GAMES_TO_PROJECT = 8
+TOTAL_TEAMS = 24          # a Championship season: 24 clubs, 46 games each
 TOTAL_GAMES = 46
 
 NEWS_FEED = ("https://news.google.com/rss/search?"
@@ -112,7 +113,7 @@ def fetch_matches(league_form=None, league_all=None):
     league_all, likewise, collects every league fixture for every club. These
     responses already contain all 552 of them; we were throwing away the ~95%
     that Wrexham are not playing in."""
-    out = []
+    out, failed, seen_ev = [], [], set()
     for league, comp_name in COMPETITIONS:
       for year, month in SEASON_MONTHS:
         # ESPN stopped accepting a date RANGE here in Sept 2026: any
@@ -124,15 +125,32 @@ def fetch_matches(league_form=None, league_all=None):
                f"?dates={year}{month:02d}")
         try:
             data = get(url, as_json=True)
-        except Exception:
+        except Exception as e:
+            # Do NOT carry on: the 46-fixture guard below counts LEAGUE games
+            # only, so a failed cup month slipped through it, dropped the tie,
+            # and write_ics then deleted its .ics -- silently, on a green run.
+            # get() already retries, so reaching here is a real outage.
+            failed.append(f"{league} {year}-{month:02d}: {type(e).__name__}")
             continue
         time.sleep(0.3)          # 33 requests a run: don't burst ESPN into a 403
         for ev in data.get("events", []):
+            # Months are unioned, so an event appearing in two buckets would be
+            # listed twice and double-counted in the Form column.
+            if ev["id"] in seen_ev:
+                continue
+            seen_ev.add(ev["id"])
             comp = ev["competitions"][0]
             teams = comp["competitors"]
+            # Decide the status ONCE. These loops used to read st["completed"]
+            # raw while Wrexham's own row went through match_state(), so an
+            # abandoned tie -- which ESPN marks completed -- would have entered
+            # the Form column and the Match tab as a real result while ESPN's
+            # own standings ignored it.
+            st = comp.get("status", {}).get("type", {})
+            ev_done, _, _ = match_state(st, datetime.fromisoformat(iso(ev["date"])),
+                                        datetime.now(timezone.utc))
             if league_form is not None and league == LEAGUE:
-                st = comp.get("status", {}).get("type", {})
-                if st.get("completed") and len(teams) == 2:
+                if ev_done and len(teams) == 2:
                     for me, them in ((teams[0], teams[1]), (teams[1], teams[0])):
                         try:
                             a, b = int(me.get("score")), int(them.get("score"))
@@ -146,7 +164,6 @@ def fetch_matches(league_form=None, league_all=None):
                             "h": me.get("homeAway") == "home",
                         })
             if league_all is not None and league == LEAGUE and len(teams) == 2:
-                st = comp.get("status", {}).get("type", {})
                 home = next((t for t in teams if t.get("homeAway") == "home"), teams[0])
                 away = next((t for t in teams if t is not home), teams[1])
                 for t in (home, away):
@@ -155,22 +172,26 @@ def fetch_matches(league_form=None, league_all=None):
                         "s": t["team"].get("shortDisplayName") or t["team"]["displayName"],
                         "a": t["team"].get("abbreviation", ""),
                     })
-                sc = lambda t: (int(t["score"]) if st.get("completed")
+                sc = lambda t: (int(t["score"]) if ev_done
                                 and str(t.get("score", "")).isdigit() else None)
                 league_all["matches"].append({
                     "i": ev["id"], "d": iso(ev["date"]),
                     "h": home["team"]["id"], "a": away["team"]["id"],
                     "hs": sc(home), "as": sc(away),
-                    "c": bool(st.get("completed")),
+                    "c": ev_done,
                     "v": comp.get("venue", {}).get("fullName", ""),
                 })
             if not any(t["team"]["id"] == TEAM_ID for t in teams):
                 continue
             us = next(t for t in teams if t["team"]["id"] == TEAM_ID)
             them = next(t for t in teams if t["team"]["id"] != TEAM_ID)
-            status = comp.get("status", {}).get("type", {})
             kickoff = datetime.fromisoformat(iso(ev["date"]))
-            done, stale, postponed = match_state(status, kickoff, datetime.now(timezone.utc))
+            done, stale, postponed = match_state(st, kickoff, datetime.now(timezone.utc))
+            # "completed" with a blank score would become int("" or 0) -> a 0-0
+            # draw: a wrong score, which is worse than a missing one. The UI
+            # already has a "Full time" state for a result it does not have yet.
+            if done and not all(str(t.get("score", "")).strip().isdigit() for t in (us, them)):
+                done, stale = False, True
             us_score = int(us.get("score") or 0) if done else None
             them_score = int(them.get("score") or 0) if done else None
             result, pens = result_of(us, them) if done else (None, None)
@@ -193,6 +214,9 @@ def fetch_matches(league_form=None, league_all=None):
                 "result": result,
                 "pens": pens,
             })
+    if failed:
+        raise SystemExit("ESPN month requests failed, refusing to write a short "
+                         "season: " + "; ".join(failed))
     out.sort(key=lambda m: m["date"])
     try:
         with open(os.path.join(DIR, "highlights.json")) as f:
@@ -728,12 +752,16 @@ def main():
     league_all = {"teams": {}, "matches": []}
     matches = fetch_matches(league_form, league_all)
     league = sum(1 for m in matches if m["comp"] == "League")
-    if league < TOTAL_GAMES:
+    if league != TOTAL_GAMES:
         # Failing here is the safe outcome: CI makes no commit and the last good
         # data.json stays deployed.
-        raise SystemExit(f"only {league}/{TOTAL_GAMES} league fixtures from ESPN; "
-                         "refusing to write a truncated season")
+        raise SystemExit(f"{league}/{TOTAL_GAMES} league fixtures from ESPN; "
+                         "refusing to write a wrong season")
     table = fetch_table(league_form)
+    if len(table) != TOTAL_TEAMS:
+        # A short table is worse than none: the ranks renumber and look real.
+        raise SystemExit(f"{len(table)}/{TOTAL_TEAMS} table rows from ESPN; "
+                         "refusing to write a partial table")
     data = {
         "updated": datetime.now(timezone.utc).isoformat(timespec="seconds"),
         "season": "2026/27",

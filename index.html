@@ -26,6 +26,7 @@
   /* Light by default, the way ESPN and most club sites read. */
   --bg:#f2f4f6; --panel:#fff; --panel2:#eaedf1; --line:#dde2e8;
   --tx:#12161a; --mut:#5c6570; --red:#c8102e; --red-dim:#f0b8bf;
+  --red-fill:#c8102e;              /* white sits on this, so it stays dark in both themes */
   --w:#1a7f37; --d:#5c6570; --l:#c8102e;
   --chip:rgba(0,0,0,.05);          /* backing behind crests */
   --neutral:#b6bec7;               /* the "other team" half of a stat bar */
@@ -78,7 +79,7 @@ header{border-bottom:1px solid var(--line)}
   color:rgba(255,255,255,.8);white-space:nowrap}
 #tz{background:rgba(255,255,255,.14);color:#fff;border:1px solid rgba(255,255,255,.4);
   border-radius:8px;padding:6px 8px;font-size:12px;font-family:inherit;max-width:190px;
-  min-height:32px}
+  min-height:40px}
 #tz option{color:#12161a;background:#fff}
 .mprow{display:grid;grid-template-columns:1fr;gap:10px}
 @media(min-width:560px){.mprow{grid-template-columns:1fr 1.4fr}}
@@ -188,7 +189,7 @@ tr.line td{border-top:2px solid var(--red-dim)}
 .links{display:flex;flex-wrap:wrap;gap:8px;margin-top:11px}
 .links a{font-size:12px;font-weight:600;color:var(--red);border:1px solid var(--red-dim);
   border-radius:999px;padding:7px 12px;min-height:34px;display:inline-flex;align-items:center}
-.links a:hover{background:var(--red);color:#fff;border-color:var(--red)}
+.links a:hover{background:var(--red-fill);color:#fff;border-color:var(--red-fill)}
 .tkey b{color:var(--tx)}
 .hide-sm{}
 .nshort{display:none}
@@ -233,8 +234,8 @@ footer img{vertical-align:middle;margin-top:5px;min-height:20px}
   min-height:40px;font-size:11px;font-weight:700;
   color:var(--red);border:1px solid var(--red-dim);background:var(--panel);
   border-radius:999px;padding:4px 9px;text-decoration:none;white-space:nowrap}
-.cal:hover{background:var(--red);color:#fff;border-color:var(--red)}
-.cal.hl{font-size:13px;padding:6px 10px;min-height:34px}
+.cal:hover{background:var(--red-fill);color:#fff;border-color:var(--red-fill)}
+.cal.hl{font-size:13px;padding:6px 10px;min-height:40px}
 .mlocal{font-size:10px;color:var(--mut);display:block}
 .mtime{flex:0 0 auto;text-align:right;font-size:11px;color:var(--mut);line-height:1.3;
   font-variant-numeric:tabular-nums;white-space:nowrap}
@@ -270,7 +271,7 @@ footer img{vertical-align:middle;margin-top:5px;min-height:20px}
 .okey{display:flex;justify-content:space-between;font-size:12px;color:var(--mut);gap:8px}
 .okey b{display:block;font-size:16px;color:var(--tx);font-variant-numeric:tabular-nums}
 .olink{display:inline-block;margin-top:11px;font-size:12px;color:var(--red);font-weight:600;
-  padding:6px 0;min-height:24px}
+  padding:11px 0;min-height:40px}
 .skel{color:var(--mut);padding:26px 0;text-align:center;font-size:14px}
 
 /* Desktop was a phone layout stretched across the screen: a 720px column in a
@@ -389,10 +390,20 @@ try {                                  // remembered across visits
   if (saved && (saved === "__device__" || TZ_OPTS.some(o => o[0] === saved)))
     TZ = saved === "__device__" ? DEVICE_TZ : saved;
 } catch (e) {}
+// Feed URLs are filtered to https at fetch time by safe_url(). This is the
+// second lock: esc() stops attribute break-out but does NOT neutralise a
+// scheme, so anything that ever reached data.json as javascript:/data: would
+// otherwise become a live href.
+const href = u => /^https:\/\//i.test(u || "") ? u : "";
 const localTime = d => d.toLocaleTimeString("en-GB", {timeZone: TZ, hour:"2-digit", minute:"2-digit"});
 const localDay  = d => d.toLocaleDateString("en-GB", {timeZone: TZ, weekday:"short", day:"numeric", month:"short"});
+// This is a calendar date (the UK day of the match), not an instant. Without an
+// explicit timeZone the browser renders it in ITS zone, so a reader in Auckland
+// saw a tooltip a day ahead of the fixture row beside it. Pin it to the same
+// zone the rest of the page dates by -- NOT to the viewer's picked zone, which
+// would shift the date the other way for exactly the same reader.
 const fmtShort  = iso => new Date(iso + "T12:00:00Z")
-  .toLocaleDateString("en-GB", {day:"numeric", month:"short"});
+  .toLocaleDateString("en-GB", {timeZone: "Europe/London", day:"numeric", month:"short"});
 const dayKey    = (d, tz) => d.toLocaleDateString("en-CA", {timeZone: tz});
 // true when the chosen zone is on a different calendar day to the UK kickoff
 const spansDay  = d => dayKey(d, TZ) !== dayKey(d, "Europe/London");
@@ -428,7 +439,7 @@ function tabs(){
       if (t.dataset.p === "centre"){                 // load the embed only on view
         const ph = document.querySelector("#centre .ytph[data-yt]");
         if (ph) ph.outerHTML = `<iframe class="yt" src="https://www.youtube-nocookie.com/embed/`
-          + ph.dataset.yt + `" title="Match highlights" allowfullscreen></iframe>`;
+          + encodeURIComponent(ph.dataset.yt) + `" title="Match highlights" allowfullscreen></iframe>`;
       }
     document.querySelectorAll(".tab").forEach(x => x.setAttribute("aria-selected", x === t));
     document.querySelectorAll("main section").forEach(s => s.hidden = s.id !== t.dataset.p);
@@ -789,16 +800,18 @@ function renderMatch(d, L){
     <div class="${["goal","own","pen"].includes(e.kind) ? "g" : ""}"><b>${esc(e.clock)}</b>
       ${e.kind === "goal" || e.kind === "own" || e.kind === "pen" ? "&#9917;"
         : e.kind === "red" ? "&#128308;" : "&#129000;"}
-      ${esc(e.who || "")}${e.kind === "own" ? " <em>(OG)</em>" : e.kind === "pen" ? " <em>(pen)</em>" : ""}
+      ${esc(e.who || "")}${e.kind === "own"
+          ? ` <em>(OG, counts for ${esc(e.us ? m.opponent : ourName)})</em>`
+          : e.kind === "pen" ? " <em>(pen)</em>" : ""}
       <em>${e.us ? esc(ourName) : esc(m.opponent)}</em></div>`).join("")}</div>` : "";
 
   const xis = L.lineups || {};
-  const xi = side => `<div><h4>${side === "us" ? esc(ourName) : esc(m.opponent)}</h4><ol>${
+  const xi = side => `<div><h3>${side === "us" ? esc(ourName) : esc(m.opponent)}</h3><ol>${
     (xis[side] || []).map(p => `<li><i>${esc(p.pos)}</i>${esc(p.name)}</li>`).join("")}</ol></div>`;
 
   const video = L.yt
     ? `<div class="yt ytph" data-yt="${esc(L.yt)}"></div>`
-    : `<a class="olink" href="${esc(L.search)}" target="_blank" rel="noopener noreferrer">&#127916; Find highlights on YouTube &rarr;</a>`;
+    : `<a class="olink" href="${esc(href(L.search))}" target="_blank" rel="noopener noreferrer">&#127916; Find highlights on YouTube &rarr;</a>`;
 
   const noStats = !Object.keys(us).length && !Object.keys(them).length;
 
@@ -841,7 +854,7 @@ function odds(d){
         <span><b>${pc(b.draw)}</b> Draw</span>
         <span><b>${pc(b.opponent)}</b> ${esc(m.opponentAbbr || "Opp")}</span>
       </div>
-      <a class="olink" href="${esc(o.url)}" target="_blank" rel="noopener noreferrer">View market on Polymarket &rarr;</a>
+      <a class="olink" href="${esc(href(o.url))}" target="_blank" rel="noopener noreferrer">View market on Polymarket &rarr;</a>
     </div>`;
   }).join("");
   return (rows || `<div class="card"><div class="note" style="margin:0">No live markets for the
@@ -914,7 +927,7 @@ function squad(d){
 }
 
 function news(d){
-  $("#news").innerHTML = (d.news.length ? "" : "<div class='skel'>No news right now.</div>") + d.news.map(n => `<a class="item" href="${esc(n.url)}" target="_blank" rel="noopener">
+  $("#news").innerHTML = (d.news.length ? "" : "<div class='skel'>No news right now.</div>") + d.news.map(n => `<a class="item" href="${esc(href(n.url))}" target="_blank" rel="noopener">
     <div class="meta"><span class="src">${esc(n.source)}</span><span>${ago(n.published)}</span></div>
     <h3>${esc(n.title)}</h3></a>`).join("");
 }
@@ -923,8 +936,8 @@ function pods(d){
   $("#pods").innerHTML = (d.podcasts.length ? "" : "<div class='skel'>No episodes right now.</div>") + d.podcasts.map(p => `<div class="item">
     <div class="meta"><span class="src">${esc(p.show)}</span><span>${ago(p.published)}</span></div>
     <h3>${esc(p.title)}</h3>
-    ${p.audio ? `<audio controls preload="none" src="${esc(p.audio)}" aria-label="Play: ${esc(p.title)}"></audio>`
-              : `<p><a href="${esc(p.url)}" target="_blank" rel="noopener">Listen on BBC Sounds &rarr;</a></p>`}
+    ${p.audio ? `<audio controls preload="none" src="${esc(href(p.audio))}" aria-label="Play: ${esc(p.title)}"></audio>`
+              : `<p><a class="olink" href="${esc(href(p.url))}" target="_blank" rel="noopener">Listen on BBC Sounds &rarr;</a></p>`}
   </div>`).join("");
 }
 
