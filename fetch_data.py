@@ -163,7 +163,14 @@ def fetch_matches(league_form=None, league_all=None):
             st = comp.get("status", {}).get("type", {})
             ev_done, _, _ = match_state(st, datetime.fromisoformat(iso(ev["date"])),
                                         datetime.now(timezone.utc))
-            if league_form is not None and league == LEAGUE:
+            # ESPN files the promotion play-offs under eng.2 alongside the
+            # regular season. They are not league games: counting them would
+            # put a 47th and 48th fixture in the table's Form column, push
+            # league.json past 552, and -- if Wrexham get there -- corrupt the
+            # progress bar, the projection and the streak in May.
+            stage = (ev.get("season") or {}).get("slug") or "regular-season"
+            playoff = league == LEAGUE and stage != "regular-season"
+            if league_form is not None and league == LEAGUE and not playoff:
                 if ev_done and len(teams) == 2:
                     for me, them in ((teams[0], teams[1]), (teams[1], teams[0])):
                         try:
@@ -177,7 +184,7 @@ def fetch_matches(league_form=None, league_all=None):
                             "o": them["team"].get("shortDisplayName") or them["team"]["displayName"],
                             "h": me.get("homeAway") == "home",
                         })
-            if league_all is not None and league == LEAGUE and len(teams) == 2:
+            if league_all is not None and league == LEAGUE and not playoff and len(teams) == 2:
                 home = next((t for t in teams if t.get("homeAway") == "home"), teams[0])
                 away = next((t for t in teams if t is not home), teams[1])
                 for t in (home, away):
@@ -212,7 +219,7 @@ def fetch_matches(league_form=None, league_all=None):
             out.append({
                 "id": ev["id"],
                 "league": league,
-                "comp": comp_name,
+                "comp": "Play-off" if playoff else comp_name,
                 "date": iso(ev["date"]),
                 "opponent": them["team"]["displayName"],
                 "logo": LOGO % them["team"]["id"],
@@ -560,7 +567,8 @@ def fetch_summary(matches):
 # kept forever. Split by month: the whole league is ~552 games a season and the
 # page should not download all of them to show one. Backfill is capped per run
 # so a cold start spreads over several crons instead of blowing the CI timeout.
-MAX_NEW_SUMMARIES = 40    # DIR is defined further down; resolve the path at call time
+MAX_NEW_SUMMARIES = 40
+ARCHIVE_SETTLE_H = 72     # ESPN revises match stats for a while after full time    # DIR is defined further down; resolve the path at call time
 
 
 def build_archive(matches, league_all):
@@ -573,12 +581,18 @@ def build_archive(matches, league_all):
     adir = os.path.join(DIR, "archive")
     os.makedirs(adir, exist_ok=True)
     want = {}                                   # event id -> (month, league)
+    recent = set()                              # played within ARCHIVE_SETTLE_H
+    settle = datetime.now(timezone.utc) - timedelta(hours=ARCHIVE_SETTLE_H)
+    def note(eid, when, lg):
+        want[eid] = (when[:7], lg)
+        if datetime.fromisoformat(when) >= settle:
+            recent.add(eid)
     for m in matches:                           # Wrexham, incl. cup competitions
         if m["completed"] and not m.get("awaitingResult"):
-            want[m["id"]] = (m["date"][:7], m["league"])
+            note(m["id"], m["date"], m["league"])
     for m in league_all["matches"]:             # every other club's league games
-        if m["c"]:
-            want.setdefault(m["i"], (m["d"][:7], LEAGUE))
+        if m["c"] and m["i"] not in want:
+            note(m["i"], m["d"], LEAGUE)
 
     months = {}
     for month in sorted({mo for mo, _ in want.values()}):
@@ -589,21 +603,32 @@ def build_archive(matches, league_all):
         except (OSError, ValueError):
             months[month] = {}
 
-    todo = [(i, mo, lg) for i, (mo, lg) in want.items() if i not in months.get(mo, {})]
+    # A finished match is cached once and kept -- but ESPN keeps editing for a
+    # while afterwards (Sheffield United v Lincoln: saves 4 -> 3, shots on
+    # target 4 -> 3, hours after full time). Re-fetch anything still inside the
+    # settling window, then let it freeze.
+    todo = [(i, mo, lg) for i, (mo, lg) in want.items()
+            if i not in months.get(mo, {}) or i in recent]
     todo.sort(key=lambda t: t[1], reverse=True)   # newest months first
-    added = 0
+    added = revised = 0
     for eid, month, lg in todo[:MAX_NEW_SUMMARIES]:
         det = match_detail({"id": eid, "league": lg})
-        if det:                                 # a failed fetch retries next run
-            months[month][eid] = det
+        if not det:                             # a failed fetch retries next run
+            time.sleep(0.3)
+            continue
+        if eid not in months[month]:
             added += 1
+        elif months[month][eid] != det:
+            revised += 1                        # ESPN edited it since we cached it
+        months[month][eid] = det
         time.sleep(0.3)
 
-    if added:
+    if added or revised:
         for month, blob in months.items():
             with open(os.path.join(adir, month + ".json"), "w") as f:
                 json.dump(blob, f, separators=(",", ":"), sort_keys=True)
-    return sum(len(b) for b in months.values()), added, max(0, len(todo) - added)
+    missing = sum(1 for i, (mo, _) in want.items() if i not in months.get(mo, {}))
+    return sum(len(b) for b in months.values()), added, revised, missing
 
 
 # WMO weather codes -> a short label. Open-Meteo is free and needs no key.
@@ -770,12 +795,12 @@ def write_ics(matches):
         keep.add(fn)
         with open(os.path.join(icsdir, fn), "w", newline="") as f:
             f.write("\r\n".join(["BEGIN:VCALENDAR", "VERSION:2.0",
-                                  "PRODID:wrexham-tracker"] + ev + ["END:VCALENDAR"]))
+                                  "PRODID:wrexham-tracker"] + ev + ["END:VCALENDAR", ""]))
     keep.add("wrexham.ics")
     with open(os.path.join(icsdir, "wrexham.ics"), "w", newline="") as f:
         f.write("\r\n".join(["BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:wrexham-tracker",
                               "X-WR-CALNAME:Wrexham AFC fixtures", "X-PUBLISHED-TTL:PT12H"]
-                             + feed + ["END:VCALENDAR"]))
+                             + feed + ["END:VCALENDAR", ""]))
     for f in os.listdir(icsdir):          # prune fixtures already played
         if f.endswith(".ics") and f not in keep:
             os.remove(os.path.join(icsdir, f))
@@ -814,9 +839,11 @@ def main():
         "podcasts": fetch_podcasts() or previous.get("podcasts", []),
         "projection": project(table, matches),
         "odds": fetch_odds(matches),
-        "lastMatch": fetch_summary(matches),
-        "nextInfo": fetch_next_info(matches),
-        "squad": fetch_squad(),
+        "lastMatch": fetch_summary(matches) or previous.get("lastMatch"),
+        "nextInfo": fetch_next_info(matches) or previous.get("nextInfo"),
+        # news and podcasts already fell back; these three did not, so a single
+        # roster or summary failure emptied a tab until the next run.
+        "squad": fetch_squad() or previous.get("squad", []),
     }
     write_ics(matches)
     league_all["matches"].sort(key=lambda m: m["d"])
@@ -830,12 +857,13 @@ def main():
         pass
     with open(os.path.join(DIR, "league.json"), "w") as f:
         json.dump(league_all, f, separators=(",", ":"))
-    kept, added, left = build_archive(matches, league_all)
+    kept, added, revised, left = build_archive(matches, league_all)
     with open(os.path.join(DIR, "data.json"), "w") as f:
         json.dump(data, f, separators=(",", ":"))
     print(f"matches={len(matches)} (league={sum(1 for m in matches if m['comp']=='League')}) table={len(table)} news={len(data['news'])} "
           f"pods={len(data['podcasts'])} odds={len(data['odds'])} squad={len(data['squad'])} "
-          f"league={len(league_all['matches'])} archive={kept} (+{added}, {left} to go)")
+          f"league={len(league_all['matches'])} archive={kept} "
+          f"(+{added}, {revised} revised, {left} to go)")
 
 
 if __name__ == "__main__":

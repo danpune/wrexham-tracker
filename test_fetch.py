@@ -282,6 +282,40 @@ def test_is_club_news():
     assert keep("Wrexham news: West Brom loss tough to take - Hyam")
 
 
+
+def test_playoffs_are_not_league_games():
+    """ESPN files the promotion play-offs under eng.2. Counting them would add a
+    47th league fixture, push league.json past 552 and corrupt the projection."""
+    def event(eid, slug, home, away, hs, as_):
+        side = lambda t, s, ha: {"team": {"id": t, "displayName": t, "shortDisplayName": t,
+                                          "abbreviation": t[:3]},
+                                 "score": str(s), "homeAway": ha}
+        return {"id": eid, "date": "2027-05-08T14:00Z", "season": {"slug": slug},
+                "competitions": [{"competitors": [side(home, hs, "home"), side(away, as_, "away")],
+                                  "status": {"type": {"name": "STATUS_FULL_TIME", "completed": True}},
+                                  "venue": {"fullName": "Ground"}}]}
+    payload = {"events": [event("1", "regular-season", "352", "Hull", 2, 0),
+                          event("2", "promotion-semifinals", "352", "Hull", 1, 1),
+                          event("3", "promotion-final", "Hull", "Millwall", 3, 1)]}
+    calls = {"n": 0}
+    def fake_get(url, as_json=False):
+        calls["n"] += 1
+        return payload if ("eng.2" in url and calls["n"] == 1) else {"events": []}
+    saved_get, saved_sleep = f.get, f.time.sleep
+    f.get, f.time.sleep = fake_get, lambda *_: None
+    try:
+        form, allm = {}, {"teams": {}, "matches": []}
+        out = f.fetch_matches(form, allm)
+    finally:
+        f.get, f.time.sleep = saved_get, saved_sleep
+
+    comps = {m["id"]: m["comp"] for m in out}
+    assert comps == {"1": "League", "2": "Play-off"}, comps      # 3 has no Wrexham
+    assert [m["i"] for m in allm["matches"]] == ["1"]             # league.json: league only
+    assert sum(len(v) for v in form.values()) == 2                # one result per club, game 1
+    assert all(e["d"][:4] == "2027" for v in form.values() for e in v)
+
+
 if __name__ == "__main__":
     for name, fn in list(globals().items()):
         if name.startswith("test_") and callable(fn):
